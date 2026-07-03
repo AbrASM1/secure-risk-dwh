@@ -1,0 +1,7 @@
+* text=auto
+*.sh text eol=lf
+*.sql text eol=lf
+*.pks text eol=lf
+*.pkb text eol=lf
+*.csv text eol=lf
+*.parquet binary

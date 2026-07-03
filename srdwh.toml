@@ -1,0 +1,16 @@
+batch_size = 10000
+reject_threshold = 0.05
+
+[profiles.dev]
+seed = 42
+first_as_of = 2025-01-31
+as_of_count = 12
+counterparties = 5000
+exposures = 50000
+
+[profiles.ci]
+seed = 7
+first_as_of = 2025-10-31
+as_of_count = 3
+counterparties = 500
+exposures = 2000
