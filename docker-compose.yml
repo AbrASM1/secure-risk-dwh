@@ -1,0 +1,19 @@
+services:
+  oracle:
+    image: gvenzl/oracle-free:23.26.1-faststart
+    ports:
+      - "127.0.0.1:1521:1521"
+    env_file: .env
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./db/init:/container-entrypoint-initdb.d:ro
+      - ./.cache/utplsql:/opt/srdwh/utplsql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+
+volumes:
+  oracle-data:

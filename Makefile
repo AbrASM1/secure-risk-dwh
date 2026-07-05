@@ -1,12 +1,47 @@
-.PHONY: setup lint test
+-include .env
+export
 
-setup:
+CACHE := .cache
+UTPLSQL_TAG := v.3.2.3
+UTPLSQL_SHA256 := ae740a0524f4e6ae0773646d7262e6bd79fa672f41da3b8d3bb80c10917306de
+UTPLSQL_CLI_TAG := v3.2.2
+UTPLSQL_CLI_SHA256 := 15a3addd921b7f2e415537b47c18a4a9d3e0b70ff0e403943fd4c03b0ba02006
+RELEASES := https://github.com/utPLSQL
+
+.PHONY: setup up down reset lint test
+
+setup: $(CACHE)/utplsql/source/install_headless.sql $(CACHE)/utPLSQL-cli/bin/utplsql
 	uv sync --locked
+
+$(CACHE)/utplsql/source/install_headless.sql:
+	mkdir -p $(CACHE)/utplsql
+	curl -fsSL -o $(CACHE)/utplsql.tar.gz.part $(RELEASES)/utPLSQL/releases/download/$(UTPLSQL_TAG)/utPLSQL.tar.gz
+	echo "$(UTPLSQL_SHA256)  $(CACHE)/utplsql.tar.gz.part" | sha256sum --check --quiet
+	tar -xzf $(CACHE)/utplsql.tar.gz.part -C $(CACHE)/utplsql --strip-components=1
+	rm $(CACHE)/utplsql.tar.gz.part
+
+$(CACHE)/utPLSQL-cli/bin/utplsql:
+	mkdir -p $(CACHE)
+	curl -fsSL -o $(CACHE)/utplsql-cli.zip.part $(RELEASES)/utPLSQL-cli/releases/download/$(UTPLSQL_CLI_TAG)/utPLSQL-cli.zip
+	echo "$(UTPLSQL_CLI_SHA256)  $(CACHE)/utplsql-cli.zip.part" | sha256sum --check --quiet
+	unzip -q -o $(CACHE)/utplsql-cli.zip.part -d $(CACHE)
+	rm $(CACHE)/utplsql-cli.zip.part
+
+up:
+	docker compose up --detach --wait
+
+down:
+	docker compose down
+
+reset:
+	docker compose down --volumes
+	docker compose up --detach --wait
 
 lint:
 	uv run ruff check src tests
 	uv run ruff format --check src tests
 	uv run mypy
+	uv run sqlfluff lint db
 
 test:
-	uv run pytest -m "not db and not perf"
+	uv run pytest -m "not perf"

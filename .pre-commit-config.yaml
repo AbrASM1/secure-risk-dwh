@@ -21,4 +21,4 @@ repos:
         name: sqlfluff lint
         entry: uv run sqlfluff lint
         language: system
-        files: ^db/.*\.sql$
+        files: ^db/.*\.(sql|pks|pkb)$
