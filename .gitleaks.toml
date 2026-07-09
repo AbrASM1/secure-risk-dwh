@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "oracle-identified-by"
+description = "Oracle password literal after IDENTIFIED BY"
+regex = '''(?i)\bidentified\s+by\s+"?([A-Za-z0-9_#$]{8,})"?'''
+secretGroup = 1
+keywords = ["identified"]
