@@ -1,0 +1,6 @@
+segment_code,lei_required,label
+SOVEREIGN,Y,Sovereigns and central banks
+BANK,Y,Banks
+CORPORATE,Y,Corporates
+SME,N,Small and medium-sized enterprises
+RETAIL,N,Retail

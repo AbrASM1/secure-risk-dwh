@@ -1,0 +1,20 @@
+reason_code,feed,rule_text
+C01,counterparty,cpty_id or cpty_name empty or over contract length
+C02,counterparty,as_of_date invalid or different from the file partition
+C03,counterparty,segment_code not in REF_SEGMENT
+C04,counterparty,rating not in REF_RATING
+C05,counterparty,default_flag not Y or N
+C06,counterparty,"lei empty for SOVEREIGN, BANK or CORPORATE, or lei present and not ^[A-Z0-9]{18}[0-9]{2}$ or with MOD 97-10 remainder (A=10 to Z=35) not 1, computed set-based over position rows"
+C07,counterparty,country not in REF_COUNTRY
+C08,counterparty,"cpty_id duplicated in the load, every occurrence"
+R01,exposure,exposure_id or cpty_id empty or over contract length
+R02,exposure,"drawn_amt or undrawn_amt not an amount, or collateral_amt neither empty nor an amount"
+R03,exposure,an amount < 0
+R04,exposure,product_code not in REF_PRODUCT
+R05,exposure,as_of_date invalid or different from the file partition
+R06,exposure,"exposure_id duplicated in the load, every occurrence"
+R07,exposure,cpty_id not among the accepted counterparties of the same as_of (counterparty load being processed)
+R08,exposure,collateral_amt > 0 and collateral_type empty
+R09,exposure,collateral_type neither empty nor in REF_COLLATERAL_TYPE
+R10,exposure,"LOAN with undrawn_amt > 0, or GUARANTEE with drawn_amt > 0"
+R11,exposure,currency not EUR

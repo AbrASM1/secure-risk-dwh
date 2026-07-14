@@ -1,0 +1,4 @@
+product_code,product_type,label
+LOAN,ON_BALANCE,Drawn loan
+UNDRAWN_LINE,OFF_BALANCE,Committed credit line
+GUARANTEE,OFF_BALANCE,Financial guarantee given

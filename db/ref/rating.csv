@@ -1,0 +1,9 @@
+rating_code,rating_bucket,rating_rank
+AAA,AAA_AA,1
+AA,AAA_AA,2
+A,A,3
+BBB,BBB,4
+BB,BB,5
+B,B,6
+CCC,CCC_C,7
+NR,NR,8

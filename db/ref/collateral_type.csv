@@ -1,0 +1,5 @@
+collateral_type,label
+CASH,Cash on deposit
+SOV_BOND,Sovereign debt securities
+CORP_BOND,Corporate debt securities
+EQUITY,Main index equities

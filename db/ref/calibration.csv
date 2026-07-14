@@ -1,0 +1,97 @@
+parameter,key,value,source,rationale
+default_rate_annual,AAA,0.0000,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024",
+default_rate_annual,AA,0.0002,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024",
+default_rate_annual,A,0.0005,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024",
+default_rate_annual,BBB,0.0014,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024",
+default_rate_annual,BB,0.0056,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024",
+default_rate_annual,B,0.0293,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024",
+default_rate_annual,CCC,0.2612,"S&P Global Ratings, Default, Transition, and Recovery: 2024 Annual Global Corporate Default And Rating Transition Study, 27 March 2025, table 4, weighted long-term average 1981-2024, column CCC/C",
+default_rate_annual,NR,0.0293,assumption,SPEC §3: unrated counterparties take the B rate.
+default_duration_months,,12,assumption,"Average stay in default: a monthly cure probability of 1/12 keeps the share in default near the annual default rate of each rating, which is also the share in default at the first as_of."
+rating_migration_monthly,,0.01,assumption,SPEC §3: about 1% of counterparties a month move one notch.
+rating_downgrade_share,,0.5,assumption,"Direction not set by the SPEC: upgrades and downgrades equally likely keep the rating mix stable; only AAA to CCC migrate, within that scale."
+name_change_monthly,,0.001,assumption,SPEC §3: 0.1% of counterparties change name each month.
+exposure_replacement_monthly,,0.02,assumption,SPEC §3: about 2% of the book replaced each month.
+amount_drift_max,,0.05,assumption,SPEC §3: amounts drift within 5% a month.
+lei_share,SOVEREIGN,1,SPEC §3,
+lei_share,BANK,1,SPEC §3,
+lei_share,CORPORATE,1,SPEC §3,
+lei_share,SME,0.5,SPEC §3,
+lei_share,RETAIL,0,SPEC §3,
+fault_rate_max,counterparty,0.005,SPEC §3,
+fault_rate_max,exposure,0.01,SPEC §3,
+segment_share,SOVEREIGN,0.01,assumption,"By number of counterparties, not by amount: retail and SME make most of the count of a universal bank; 1% still gives 5 sovereigns in the ci profile."
+segment_share,BANK,0.04,assumption,"By number of counterparties, not by amount: retail and SME make most of the count of a universal bank; 1% still gives 5 sovereigns in the ci profile."
+segment_share,CORPORATE,0.20,assumption,"By number of counterparties, not by amount: retail and SME make most of the count of a universal bank; 1% still gives 5 sovereigns in the ci profile."
+segment_share,SME,0.25,assumption,"By number of counterparties, not by amount: retail and SME make most of the count of a universal bank; 1% still gives 5 sovereigns in the ci profile."
+segment_share,RETAIL,0.50,assumption,"By number of counterparties, not by amount: retail and SME make most of the count of a universal bank; 1% still gives 5 sovereigns in the ci profile."
+rating_share,SOVEREIGN.AAA,0.25,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.AA,0.30,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.A,0.20,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.BBB,0.15,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.BB,0.05,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.B,0.05,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.CCC,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SOVEREIGN.NR,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.AAA,0.02,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.AA,0.18,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.A,0.40,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.BBB,0.25,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.BB,0.10,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.B,0.05,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.CCC,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,BANK.NR,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.AAA,0.01,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.AA,0.04,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.A,0.15,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.BBB,0.30,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.BB,0.20,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.B,0.10,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.CCC,0.02,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,CORPORATE.NR,0.18,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.AAA,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.AA,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.A,0.02,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.BBB,0.05,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.BB,0.08,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.B,0.05,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.CCC,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,SME.NR,0.80,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.AAA,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.AA,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.A,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.BBB,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.BB,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.B,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.CCC,0,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+rating_share,RETAIL.NR,1,assumption,"Sovereigns and banks rated, mostly investment grade; corporates centred on BBB, some unrated; most SME and every retail client unrated, their risk weight being flat (SPEC §7)."
+country_share,FR,0.50,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,DE,0.10,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,IT,0.07,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,ES,0.07,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,BE,0.05,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,NL,0.05,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,LU,0.04,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,AT,0.02,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,IE,0.02,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,PT,0.02,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,GB,0.03,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,CH,0.01,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+country_share,US,0.02,assumption,"A bank lending in EUR from France: half the book at home, most of the rest in the euro area, a small share in the United Kingdom, Switzerland and the United States."
+product_share,LOAN,0.70,assumption,Drawn loans dominate a lending book; lines and guarantees exercise the CCF of 0.40 and 1.00.
+product_share,UNDRAWN_LINE,0.20,assumption,Drawn loans dominate a lending book; lines and guarantees exercise the CCF of 0.40 and 1.00.
+product_share,GUARANTEE,0.10,assumption,Drawn loans dominate a lending book; lines and guarantees exercise the CCF of 0.40 and 1.00.
+amount_median,SOVEREIGN,20000000,assumption,"Median exposure size in EUR, lognormal, growing with the size of the counterparty."
+amount_median,BANK,5000000,assumption,"Median exposure size in EUR, lognormal, growing with the size of the counterparty."
+amount_median,CORPORATE,1500000,assumption,"Median exposure size in EUR, lognormal, growing with the size of the counterparty."
+amount_median,SME,150000,assumption,"Median exposure size in EUR, lognormal, growing with the size of the counterparty."
+amount_median,RETAIL,15000,assumption,"Median exposure size in EUR, lognormal, growing with the size of the counterparty."
+amount_sigma,,1,assumption,Standard deviation of the log of the exposure size: sizes spread over two orders of magnitude around the median.
+line_drawn_share_max,,1,assumption,"Drawn share of a committed line, uniform between 0 and this bound."
+collateral_share,,0.30,assumption,Share of exposures secured by financial collateral.
+collateral_type_share,CASH,0.25,assumption,"Even mix, so that every haircut of the parameter set is exercised."
+collateral_type_share,SOV_BOND,0.25,assumption,"Even mix, so that every haircut of the parameter set is exercised."
+collateral_type_share,CORP_BOND,0.25,assumption,"Even mix, so that every haircut of the parameter set is exercised."
+collateral_type_share,EQUITY,0.25,assumption,"Even mix, so that every haircut of the parameter set is exercised."
+collateral_ratio_min,,0.2,assumption,"Collateral over exposure size, uniform between this bound and the maximum."
+collateral_ratio_max,,1.2,assumption,"Above 1 the exposure is over-collateralised and E* falls to 0, as in golden case G4."
