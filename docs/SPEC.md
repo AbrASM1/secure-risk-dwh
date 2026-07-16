@@ -190,7 +190,7 @@ Total RWA: 2,211,000.00.
 
 - Gold comparisons (A6): order-independent checksum per table over natural keys and attributes, surrogate keys and run_id excluded.
 - pytest-cov: fail under 80% on src/srdwh.
-- LEI oracle: db/tests/fixtures/lei_gleif_sample.csv holds 1,000 LEI codes from GLEIF (Golden Copy or API, CC0, codes only; SOURCE.md beside it gives origin and extraction date). Every code passes the simulator check and C06; every code with one character changed fails both.
+- LEI oracle: db/tests/fixtures/lei_gleif_sample.csv holds 1,000 LEI codes from GLEIF (Golden Copy or API, CC0, codes only; SOURCE.md beside it gives origin and extraction date). Every code passes the simulator check and C06; every code with one character replaced by another of the same class (digit for digit, letter for letter) fails both. A cross-class replacement changes the digit count of the MOD 97-10 number and can pass: 3,540 of the 700,000 single-character variants of the sample do.
 
 ## 12. F10 CI (GitHub Actions)
 - Workflow permissions: contents read. Third-party actions pinned by commit SHA. Dependabot weekly on github-actions and uv.

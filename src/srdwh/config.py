@@ -37,6 +37,10 @@ class Profile:
     counterparties: int
     exposures: int
 
+    @property
+    def as_of_dates(self) -> tuple[date, ...]:
+        return tuple(month_end(self.first_as_of, months) for months in range(self.as_of_count))
+
 
 @dataclass(frozen=True)
 class Settings:
