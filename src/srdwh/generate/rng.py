@@ -2,7 +2,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-STREAMS = MappingProxyType({"counterparty": 1})
+STREAMS = MappingProxyType({"counterparty": 1, "exposure": 2, "fault": 3})
 
 
 def stream(seed: int, name: str) -> np.random.Generator:
