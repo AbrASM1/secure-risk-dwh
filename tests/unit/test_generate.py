@@ -1,17 +1,23 @@
+import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 
 import polars as pl
 import pytest
 
-from srdwh.config import Profile
+from srdwh.config import Profile, load_settings
 from srdwh.contracts.feeds import FIELD_LENGTHS, validate_feed
 from srdwh.contracts.reference import read_reference
 from srdwh.contracts.validation import ContractError
 from srdwh.generate.calibration import Calibration
 from srdwh.generate.counterparties import CounterpartyModel, counterparties, counterparty_model
+from srdwh.generate.faults import COUNTERPARTY_RULES, EXPOSURE_RULES
+from srdwh.generate.landing import write_partition
 from srdwh.generate.lei import is_valid_lei
 from srdwh.generate.names import FIRST_NAMES, LAST_NAMES
+from srdwh.generate.simulate import Partition, simulate
+from srdwh.generate.truth import REASON
 from tests.unit.bounds import mean, within
 
 LEGAL_ENTITIES = ["SOVEREIGN", "BANK", "CORPORATE"]
@@ -130,3 +136,90 @@ def test_model_rejects_inconsistent_reference(calibration: Calibration, ref_dir:
         counterparty_model(calibration, ratings, read_reference(ref_dir, "country"))
     with pytest.raises(ContractError, match=r"outside country\.csv"):
         counterparty_model(calibration, read_reference(ref_dir, "rating"), read_reference(ref_dir, "country").head(3))
+
+
+SETTINGS = Path(__file__).resolve().parents[2] / "srdwh.toml"
+RULES = {"counterparty": COUNTERPARTY_RULES, "exposure": EXPOSURE_RULES}
+
+
+def settings_profile(name: str) -> Profile:
+    return load_settings(SETTINGS).profile(name)
+
+
+@pytest.fixture(scope="module", params=["ci", "dev"])
+def simulated(request: pytest.FixtureRequest, ref_dir: Path) -> tuple[Profile, list[Partition]]:
+    chosen = settings_profile(request.param)
+    return chosen, list(simulate(chosen, ref_dir))
+
+
+def expected_per_row(partition: Partition) -> pl.Series:
+    rows = pl.DataFrame({"src_row": pl.int_range(1, partition.rows.height + 1, eager=True)})
+    return rows.join(partition.expected, on="src_row", how="left", maintain_order="left")[REASON]
+
+
+def accepted_cpty_ids(partitions: list[Partition], partition: Partition) -> pl.Series:
+    cpty = next(p for p in partitions if p.feed == "counterparty" and p.as_of == partition.as_of)
+    return cpty.rows.filter(expected_per_row(cpty).is_null())["cpty_id"].str.strip_chars(" ")
+
+
+def test_fault_per_rule_per_as_of(simulated: tuple[Profile, list[Partition]]) -> None:
+    profile, partitions = simulated
+    assert len(partitions) == 2 * profile.as_of_count
+    for partition in partitions:
+        assert set(partition.injected.drop_nulls()) == set(RULES[partition.feed])
+        assert set(partition.expected[REASON]) == set(RULES[partition.feed])
+
+
+def test_fault_rates_within_bounds(simulated: tuple[Profile, list[Partition]], calibration: Calibration) -> None:
+    profile, partitions = simulated
+    rates = dict(calibration.keyed("fault_rate_max").iter_rows())
+    threshold = float(load_settings(SETTINGS).reject_threshold)
+    for partition in partitions:
+        size = profile.counterparties if partition.feed == "counterparty" else profile.exposures
+        copies = partition.rows.height - size
+        events = partition.injected.drop_nulls().len() - copies
+        assert events == max(len(RULES[partition.feed]), int(rates[partition.feed] * size))
+        assert partition.expected.height / partition.rows.height < threshold
+
+
+def test_ground_truth_first_failing_rule(simulated: tuple[Profile, list[Partition]]) -> None:
+    for partition in simulated[1]:
+        expected, injected = expected_per_row(partition), partition.injected
+        assert (expected.filter(injected.is_not_null()) == injected.drop_nulls()).all()
+        cascades = expected.filter(injected.is_null()).drop_nulls()
+        assert set(cascades) <= ({"R07"} if partition.feed == "exposure" else set())
+
+
+def test_ground_truth_r07_cascade(simulated: tuple[Profile, list[Partition]]) -> None:
+    partitions = simulated[1]
+    for partition in (p for p in partitions if p.feed == "exposure"):
+        rows = partition.rows.with_columns(expected=expected_per_row(partition), injected=partition.injected)
+        accepted = accepted_cpty_ids(partitions, partition).implode()
+        orphans = rows.filter(~pl.col("cpty_id").str.strip_chars(" ").is_in(accepted) & pl.col("injected").is_null())
+        assert orphans.height > 0
+        assert (orphans["expected"] == "R07").all()
+        assert rows.filter(pl.col("injected").is_null() & (pl.col("expected") == "R07")).height == orphans.height
+
+
+def write_all(profile: Profile, ref_dir: Path, data_dir: Path) -> dict[str, dict[str, object]]:
+    for partition in simulate(profile, ref_dir):
+        write_partition(partition, data_dir, profile)
+    return {
+        str(path.parent.relative_to(data_dir)): json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(data_dir.glob("landing/*/*/manifest.json"))
+    }
+
+
+def test_same_seed_same_sha256(tmp_path: Path, ref_dir: Path) -> None:
+    ci = settings_profile("ci")
+    first, second = write_all(ci, ref_dir, tmp_path / "a"), write_all(ci, ref_dir, tmp_path / "b")
+    assert first == second
+    assert len(first) == 2 * ci.as_of_count
+    for folder, manifest in first.items():
+        data = (tmp_path / "a" / folder / "part-0.parquet").read_bytes()
+        assert manifest["sha256"] == hashlib.sha256(data).hexdigest()
+        frame = pl.read_parquet(tmp_path / "a" / folder / "part-0.parquet")
+        assert validate_feed(str(manifest["feed"]), frame).height == manifest["rows"]
+    assert write_all(ci, ref_dir, tmp_path / "a") == first
+    reseeded = write_all(replace(ci, seed=ci.seed + 1), ref_dir, tmp_path / "c")
+    assert all(reseeded[f]["sha256"] != first[f]["sha256"] for f in first)

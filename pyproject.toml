@@ -12,6 +12,9 @@ dependencies = [
     "typer>=0.12",
 ]
 
+[project.scripts]
+srdwh = "srdwh.cli:main"
+
 [dependency-groups]
 dev = [
     "mypy>=1.11",
