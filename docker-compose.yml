@@ -7,6 +7,9 @@ services:
     volumes:
       - oracle-data:/opt/oracle/oradata
       - ./db/init:/container-entrypoint-initdb.d:ro
+      - ./db/ddl:/opt/srdwh/ddl:ro
+      - ./db/ref:/opt/srdwh/ref:ro
+      - ./db/tests:/opt/srdwh/tests:ro
       - ./.cache/utplsql:/opt/srdwh/utplsql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh"]

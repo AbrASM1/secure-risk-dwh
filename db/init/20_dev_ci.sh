@@ -18,8 +18,10 @@ WHENEVER OSERROR EXIT FAILURE
 ALTER SESSION SET CONTAINER = FREEPDB1;
 @create_utplsql_owner.sql UT3 ${ut3_password} USERS
 @install.sql UT3
+@create_user_grants.sql UT3 SRDWH_OWNER
+@create_user_synonyms.sql UT3 SRDWH_OWNER
 ALTER USER ut3 ACCOUNT LOCK;
 EXIT
 SQL
 
-echo "20_dev_ci: utPLSQL installed in FREEPDB1, UT3 locked (SRDWH_ENV=${SRDWH_ENV})"
+echo "20_dev_ci: utPLSQL installed in FREEPDB1 for SRDWH_OWNER, UT3 locked (SRDWH_ENV=${SRDWH_ENV})"
