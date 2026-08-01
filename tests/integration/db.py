@@ -12,6 +12,6 @@ def rows(connection: oracledb.Connection, sql: str, **binds: object) -> list[tup
     return result
 
 
-def execute(connection: oracledb.Connection, sql: str) -> None:
+def execute(connection: oracledb.Connection, sql: str, **binds: object) -> None:
     with connection.cursor() as cursor:
-        cursor.execute(sql)
+        cursor.execute(sql, binds)

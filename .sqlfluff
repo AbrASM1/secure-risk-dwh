@@ -13,9 +13,10 @@ capitalisation_policy = upper
 
 [sqlfluff:rules:capitalisation.identifiers]
 extended_capitalisation_policy = lower
+ignore_words = pragma,sql
 
 [sqlfluff:rules:capitalisation.functions]
-extended_capitalisation_policy = upper
+extended_capitalisation_policy = lower
 
 [sqlfluff:rules:capitalisation.literals]
 capitalisation_policy = upper

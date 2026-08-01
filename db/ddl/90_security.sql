@@ -1,0 +1,2 @@
+ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
+GRANT EXECUTE ON pkg_ops TO srdwh_etl;

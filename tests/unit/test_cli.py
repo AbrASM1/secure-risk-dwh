@@ -25,14 +25,20 @@ def test_generate_seed_overrides_profile(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "argv",
-    [[], ["generate"], ["generate", "--profile", "prod"], ["generate", "--profile", "ci", "--seed", "-1"], ["bogus"]],
+    ("argv", "code"),
+    [
+        (["generate", "--profile", "ci"], 0),
+        ([], 1),
+        (["generate"], 1),
+        (["generate", "--profile", "prod"], 1),
+        (["generate", "--profile", "ci", "--seed", "-1"], 1),
+        (["bogus"], 1),
+    ],
 )
-def test_errors_exit_1(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str]) -> None:
-    monkeypatch.setattr(
-        "sys.argv", ["srdwh", *argv, *(["--data-dir", str(tmp_path)] if argv[:1] == ["generate"] else [])]
-    )
+def test_exit_codes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str], code: int) -> None:
+    data_dir = ["--data-dir", str(tmp_path)] if argv[:1] == ["generate"] else []
+    monkeypatch.setattr("sys.argv", ["srdwh", *argv, *data_dir])
     with pytest.raises(SystemExit) as stop:
         main()
-    assert stop.value.code == 1
-    assert not list(tmp_path.rglob("*.parquet"))
+    assert stop.value.code == code
+    assert bool(list(tmp_path.rglob("*.parquet"))) == (code == 0)

@@ -29,11 +29,11 @@ BEGIN
         WHERE c.comments IS NULL AND c.table_name NOT LIKE 'BIN$%'
     )
 
-    SELECT LISTAGG(problem, '; ' ON OVERFLOW TRUNCATE) WITHIN GROUP (ORDER BY problem)
+    SELECT listagg(problem, '; ' ON OVERFLOW TRUNCATE) WITHIN GROUP (ORDER BY problem)
     INTO l_problems
     FROM problems;
     IF l_problems IS NOT NULL THEN
-        RAISE_APPLICATION_ERROR(-20001, SUBSTR('deploy check: ' || l_problems, 1, 2000));
+        raise_application_error(-20001, substr('deploy check: ' || l_problems, 1, 2000));
     END IF;
 END;
 /

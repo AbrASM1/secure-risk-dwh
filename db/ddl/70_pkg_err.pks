@@ -1,0 +1,5 @@
+ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
+CREATE OR REPLACE PACKAGE pkg_err AUTHID DEFINER AS
+    PROCEDURE log_error(p_run_id IN NUMBER, p_step IN VARCHAR2);
+END pkg_err;
+/
