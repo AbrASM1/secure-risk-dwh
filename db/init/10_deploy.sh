@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-ddl=/opt/srdwh/ddl
+ddl="${1:-/opt/srdwh/ddl}"
 opening='^ALTER SESSION SET CURRENT_SCHEMA = (srdwh_owner|srdwh_sec);$'
 
 run() {

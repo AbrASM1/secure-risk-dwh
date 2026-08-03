@@ -56,6 +56,17 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
                 RAISE;
     END register_load;
 
+    FUNCTION is_loaded(p_feed IN VARCHAR2, p_as_of_date IN DATE, p_sha256 IN VARCHAR2) RETURN NUMBER IS -- F2
+        l_loaded NUMBER;
+    BEGIN
+        SELECT count(*) INTO l_loaded
+        FROM ops_load_registry
+        WHERE
+            feed = p_feed AND as_of_date = p_as_of_date AND sha256 = p_sha256 AND status = 'LOADED'
+            AND ROWNUM = 1;
+        RETURN l_loaded;
+    END is_loaded;
+
     PROCEDURE close_load(p_run_id IN NUMBER, p_load_id IN NUMBER) IS -- F2
         l_rows ops_load_registry.rows_loaded%TYPE;
     BEGIN

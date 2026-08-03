@@ -77,3 +77,17 @@ def test_authentication_error_not_retried() -> None:
             clock=clock.time,
         )
     assert clock.pauses == []
+
+
+def test_no_client_identifier_before_the_run_exists() -> None:
+    clock = Clock()
+    connection = connect(
+        CREDENTIALS,
+        None,
+        "lock",
+        opener=opener(0, oracledb.OperationalError("down")),
+        sleep=clock.sleep,
+        clock=clock.time,
+    )
+    assert not hasattr(connection, "client_identifier")
+    assert (connection.module, connection.action) == ("srdwh", "lock")

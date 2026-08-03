@@ -27,7 +27,8 @@ def connect(
 
 
 def tag(connection: oracledb.Connection, run_id: int | None, step: str) -> None:
-    connection.client_identifier = "" if run_id is None else str(run_id)
+    if run_id is not None:
+        connection.client_identifier = str(run_id)
     connection.module = MODULE
     connection.action = step
 

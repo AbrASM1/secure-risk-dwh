@@ -73,13 +73,14 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def emit(event: Event, stream: TextIO = sys.stdout, now: Callable[[], datetime] = utc_now) -> None:
+def emit(event: Event, stream: TextIO | None = None, now: Callable[[], datetime] = utc_now) -> None:
+    out = stream or sys.stdout
     values = asdict(event) | {"ts": now().isoformat(timespec="milliseconds")}
-    stream.write(json.dumps({name: values[name] for name in FIELDS}, default=_json_value, ensure_ascii=False) + "\n")
-    stream.flush()
+    out.write(json.dumps({name: values[name] for name in FIELDS}, default=_json_value, ensure_ascii=False) + "\n")
+    out.flush()
 
 
-def run_end(run_id: int | None, exit_code: int, duration_ms: int, stream: TextIO = sys.stdout) -> None:
+def run_end(run_id: int | None, exit_code: int, duration_ms: int, stream: TextIO | None = None) -> None:
     level = "INFO" if exit_code == 0 else "ERROR"
     emit(
         Event(

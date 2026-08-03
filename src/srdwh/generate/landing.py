@@ -8,17 +8,20 @@ import polars as pl
 
 from srdwh.config import Profile
 from srdwh.contracts.feeds import CONTRACT_VERSION
-from srdwh.generate.simulate import Partition
+from srdwh.contracts.landing import DATA_FILE, EXPECTED, MANIFEST, partition_folder
+from srdwh.generate.simulate import Partition, simulate
 
 ZSTD_LEVEL = 3
 ROW_GROUP_SIZE = 100_000
-DATA_FILE = "part-0.parquet"
-MANIFEST = "manifest.json"
-EXPECTED = "expected.parquet"
+
+
+def write_landing(profile: Profile, ref_dir: Path, data_dir: Path) -> None:
+    for partition in simulate(profile, ref_dir):
+        write_partition(partition, data_dir, profile)
 
 
 def write_partition(partition: Partition, data_dir: Path, profile: Profile) -> Path:
-    folder = Path(partition.feed) / f"as_of_date={partition.as_of.isoformat()}"
+    folder = partition_folder(partition.feed, partition.as_of)
     landing = data_dir / "landing" / folder
     (landing / MANIFEST).unlink(missing_ok=True)
     data = parquet(partition.rows)

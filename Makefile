@@ -50,3 +50,5 @@ bronze-check:
 
 test:
 	uv run pytest -m "not perf"
+	@JAVA_OPTS=--enable-native-access=ALL-UNNAMED $(CACHE)/utPLSQL-cli/bin/utplsql run \
+		"SRDWH_OWNER/$${SRDWH_OWNER_PASSWORD}@$${SRDWH_DSN}" -f=ut_documentation_reporter -c --failure-exit-code=1

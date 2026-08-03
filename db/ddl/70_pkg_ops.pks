@@ -19,6 +19,8 @@ CREATE OR REPLACE PACKAGE pkg_ops AUTHID DEFINER AS
         p_rows_expected IN NUMBER
     ) RETURN NUMBER;
 
+    FUNCTION is_loaded(p_feed IN VARCHAR2, p_as_of_date IN DATE, p_sha256 IN VARCHAR2) RETURN NUMBER;
+
     PROCEDURE close_load(p_run_id IN NUMBER, p_load_id IN NUMBER);
 
     PROCEDURE fail_load(p_run_id IN NUMBER, p_load_id IN NUMBER, p_message IN VARCHAR2);
