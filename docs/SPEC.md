@@ -222,7 +222,7 @@ Total RWA: 2,211,000.00.
 | A8 | Analyst detail reads leave FGA records readable by AUDITOR within 30 s; pipeline accounts leave none |
 | A9 | CI green on main with badge, all suites pass, coverage >= 80% |
 | A10 | gitleaks clean on full history; passwords only from environment |
-| A11 | SRDWH_ETL gets ORA-01031 on UPDATE, DELETE, MERGE and TRUNCATE of BRZ_; bronze check clean |
+| A11 | SRDWH_ETL is refused UPDATE, DELETE, MERGE and TRUNCATE of BRZ_ with an insufficient-privilege error (ORA-41900 on 26ai for UPDATE, DELETE and MERGE, ORA-01031 for TRUNCATE); bronze check clean |
 | A12 | Reject rate above threshold for any as_of of a run: exit 2, rejects and reject counts kept, silver and gold of every as_of unchanged |
 | A13 | Concurrent run exits 1 without side effect; a killed run leaves nothing blocking the next one |
 | A14 | Python peak RSS < 1 GB on dev profile |
