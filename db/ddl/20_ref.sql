@@ -1,8 +1,8 @@
 ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
 
 CREATE TABLE ref_segment (
-    segment_code VARCHAR2(20) NOT NULL,
-    lei_required VARCHAR2(1) NOT NULL,
+    segment_code VARCHAR2 (20 CHAR) NOT NULL,
+    lei_required VARCHAR2 (1 CHAR) NOT NULL,
     label VARCHAR2(200) NOT NULL,
     CONSTRAINT ref_segment_pk PRIMARY KEY (segment_code),
     CONSTRAINT ref_segment_lei_required_ck CHECK (lei_required IN ('Y', 'N'))
@@ -14,8 +14,8 @@ COMMENT ON COLUMN ref_segment.lei_required IS 'Y when an LEI is mandatory for th
 COMMENT ON COLUMN ref_segment.label IS 'Segment label.';
 
 CREATE TABLE ref_rating (
-    rating_code VARCHAR2(20) NOT NULL,
-    rating_bucket VARCHAR2(20) NOT NULL,
+    rating_code VARCHAR2 (20 CHAR) NOT NULL,
+    rating_bucket VARCHAR2 (20 CHAR) NOT NULL,
     rating_rank NUMBER(2) NOT NULL,
     CONSTRAINT ref_rating_pk PRIMARY KEY (rating_code),
     CONSTRAINT ref_rating_rating_rank_uk UNIQUE (rating_rank)
@@ -27,8 +27,8 @@ COMMENT ON COLUMN ref_rating.rating_bucket IS 'Risk-weight bucket of the rating 
 COMMENT ON COLUMN ref_rating.rating_rank IS 'Order from best to worst, used for one-notch migrations.';
 
 CREATE TABLE ref_product (
-    product_code VARCHAR2(20) NOT NULL,
-    product_type VARCHAR2(20) NOT NULL,
+    product_code VARCHAR2 (20 CHAR) NOT NULL,
+    product_type VARCHAR2 (20 CHAR) NOT NULL,
     label VARCHAR2(200) NOT NULL,
     CONSTRAINT ref_product_pk PRIMARY KEY (product_code),
     CONSTRAINT ref_product_product_type_ck CHECK (product_type IN ('ON_BALANCE', 'OFF_BALANCE'))
@@ -40,7 +40,7 @@ COMMENT ON COLUMN ref_product.product_type IS 'ON_BALANCE or OFF_BALANCE.';
 COMMENT ON COLUMN ref_product.label IS 'Product label.';
 
 CREATE TABLE ref_collateral_type (
-    collateral_type VARCHAR2(20) NOT NULL,
+    collateral_type VARCHAR2 (20 CHAR) NOT NULL,
     label VARCHAR2(200) NOT NULL,
     CONSTRAINT ref_collateral_type_pk PRIMARY KEY (collateral_type)
 );
@@ -50,7 +50,7 @@ COMMENT ON COLUMN ref_collateral_type.collateral_type IS 'Collateral type code.'
 COMMENT ON COLUMN ref_collateral_type.label IS 'Collateral type label.';
 
 CREATE TABLE ref_country (
-    country_code VARCHAR2(2) NOT NULL,
+    country_code VARCHAR2 (2 CHAR) NOT NULL,
     label VARCHAR2(200) NOT NULL,
     CONSTRAINT ref_country_pk PRIMARY KEY (country_code)
 );
@@ -60,7 +60,7 @@ COMMENT ON COLUMN ref_country.country_code IS 'Country code.';
 COMMENT ON COLUMN ref_country.label IS 'Country name.';
 
 CREATE TABLE ref_reason_code (
-    reason_code VARCHAR2(3) NOT NULL,
+    reason_code VARCHAR2 (3 CHAR) NOT NULL,
     feed VARCHAR2(20) NOT NULL,
     rule_text VARCHAR2(4000) NOT NULL,
     CONSTRAINT ref_reason_code_pk PRIMARY KEY (reason_code),
