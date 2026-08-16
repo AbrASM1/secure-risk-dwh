@@ -1,5 +1,9 @@
 ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
 CREATE OR REPLACE PACKAGE BODY pkg_silver AS
+    c_amount CONSTANT VARCHAR2(40) := '^-?[0-9]{1,16}(\.[0-9]{1,2})?$';
+    c_amount_format CONSTANT VARCHAR2(30) := '9999999999999999D99';
+    c_numeric CONSTANT VARCHAR2(40) := 'NLS_NUMERIC_CHARACTERS=''.,''';
+
     FUNCTION load_as_of(p_load_id IN NUMBER, p_feed IN VARCHAR2) RETURN DATE IS
         l_as_of DATE;
     BEGIN
@@ -156,11 +160,8 @@ CREATE OR REPLACE PACKAGE BODY pkg_silver AS
                 RAISE;
     END reject_counterparties;
 
-    PROCEDURE insert_counterparties(p_run_id IN NUMBER, p_load_id IN NUMBER) IS -- F3
-        l_as_of DATE := load_as_of(p_load_id, 'counterparty');
+    FUNCTION rejected_rows(p_load_id IN NUMBER) RETURN NUMBER IS
         l_rejected ops_load_registry.rows_rejected%TYPE;
-        l_inserted PLS_INTEGER;
-        l_bronze PLS_INTEGER;
     BEGIN
         SELECT rows_rejected INTO l_rejected
         FROM ops_load_registry
@@ -168,13 +169,30 @@ CREATE OR REPLACE PACKAGE BODY pkg_silver AS
         IF l_rejected IS NULL THEN
             raise_application_error(c_rejects_missing, 'rejects of load ' || p_load_id || ' not computed');
         END IF;
-        DELETE FROM slv_counterparty
-        WHERE as_of_date = l_as_of;
+        RETURN l_rejected;
+    END rejected_rows;
+
+    PROCEDURE reconcile(p_load_id IN NUMBER, p_bronze IN NUMBER, p_silver IN NUMBER) IS
+        l_rejected NUMBER := rejected_rows(p_load_id);
+    BEGIN
+        IF p_bronze != p_silver + l_rejected THEN
+            raise_application_error(
+                c_reconciliation,
+                'load ' || p_load_id || ': ' || p_bronze || ' bronze rows, '
+                || p_silver || ' silver and ' || l_rejected || ' rejected'
+            );
+        END IF;
+    END reconcile;
+
+    PROCEDURE insert_counterparties(p_load_id IN NUMBER, p_as_of IN DATE) IS
+        l_inserted PLS_INTEGER;
+        l_bronze PLS_INTEGER;
+    BEGIN
         INSERT INTO slv_counterparty (
             as_of_date, cpty_id, cpty_name, lei, segment_code, country, rating, default_flag, load_id, src_row
         )
         SELECT
-            l_as_of,
+            p_as_of,
             trim(cpty_id) AS cpty_id,
             trim(cpty_name) AS cpty_name,
             trim(lei) AS lei,
@@ -195,17 +213,205 @@ CREATE OR REPLACE PACKAGE BODY pkg_silver AS
         SELECT count(*) INTO l_bronze
         FROM brz_counterparty
         WHERE load_id = p_load_id;
-        IF l_bronze != l_inserted + l_rejected THEN
-            raise_application_error(
-                c_reconciliation,
-                'load ' || p_load_id || ': ' || l_bronze || ' bronze rows, '
-                || l_inserted || ' silver and ' || l_rejected || ' rejected'
+        reconcile(p_load_id, l_bronze, l_inserted);
+    END insert_counterparties;
+
+    PROCEDURE insert_exposures(p_load_id IN NUMBER, p_as_of IN DATE) IS
+        l_inserted PLS_INTEGER;
+        l_bronze PLS_INTEGER;
+    BEGIN
+        INSERT INTO slv_exposure (
+            as_of_date, exposure_id, cpty_id, product_code, drawn_amt, undrawn_amt, collateral_amt,
+            collateral_type, currency, load_id, src_row
+        )
+        SELECT
+            p_as_of,
+            trim(exposure_id) AS exposure_id,
+            trim(cpty_id) AS cpty_id,
+            trim(product_code) AS product_code,
+            to_number(trim(drawn_amt), c_amount_format, c_numeric) AS drawn_amt,
+            to_number(trim(undrawn_amt), c_amount_format, c_numeric) AS undrawn_amt,
+            coalesce(to_number(trim(collateral_amt), c_amount_format, c_numeric), 0) AS collateral_amt,
+            trim(collateral_type) AS collateral_type,
+            trim(currency) AS currency,
+            load_id,
+            src_row
+        FROM brz_exposure
+        WHERE
+            load_id = p_load_id
+            AND NOT EXISTS (
+                SELECT 1 FROM slv_rej_exposure r
+                WHERE r.load_id = brz_exposure.load_id AND r.src_row = brz_exposure.src_row
             );
+        l_inserted := SQL%ROWCOUNT;
+        SELECT count(*) INTO l_bronze
+        FROM brz_exposure
+        WHERE load_id = p_load_id;
+        reconcile(p_load_id, l_bronze, l_inserted);
+    END insert_exposures;
+
+    PROCEDURE reject_exposures(p_run_id IN NUMBER, p_load_id IN NUMBER, p_cpty_load_id IN NUMBER) IS -- F3
+        l_as_of DATE := load_as_of(p_load_id, 'exposure');
+        l_as_of_text VARCHAR2(10) := to_char(l_as_of, 'YYYY-MM-DD');
+        l_rejected PLS_INTEGER;
+    BEGIN
+        IF load_as_of(p_cpty_load_id, 'counterparty') != l_as_of THEN
+            raise_application_error(c_as_of_mismatch, 'loads ' || p_load_id || ' and ' || p_cpty_load_id || ' differ');
         END IF;
+        DELETE FROM slv_rej_exposure
+        WHERE load_id = p_load_id;
+        INSERT INTO slv_rej_exposure (
+            load_id, src_row, as_of_date, reason_code, exposure_id, cpty_id, product_code,
+            drawn_amt, undrawn_amt, collateral_amt, collateral_type, currency, raw_as_of_date
+        )
+        WITH trimmed AS (
+            SELECT
+                load_id,
+                src_row,
+                exposure_id,
+                cpty_id,
+                product_code,
+                drawn_amt,
+                undrawn_amt,
+                collateral_amt,
+                collateral_type,
+                currency,
+                as_of_date,
+                trim(exposure_id) AS t_exposure_id,
+                trim(cpty_id) AS t_cpty_id,
+                trim(product_code) AS t_product_code,
+                trim(drawn_amt) AS t_drawn_amt,
+                trim(undrawn_amt) AS t_undrawn_amt,
+                trim(collateral_amt) AS t_collateral_amt,
+                trim(collateral_type) AS t_collateral_type,
+                trim(currency) AS t_currency,
+                trim(as_of_date) AS t_as_of_date,
+                l_as_of_text AS partition_date,
+                c_amount AS amount_pattern,
+                c_amount_format AS amount_format,
+                c_numeric AS numeric_settings
+            FROM brz_exposure
+            WHERE load_id = p_load_id
+        ),
+
+        src AS (
+            SELECT
+                t.*,
+                CASE
+                    WHEN regexp_like(t.t_drawn_amt, t.amount_pattern)
+                        THEN to_number(t.t_drawn_amt, t.amount_format, t.numeric_settings)
+                END AS drawn_value,
+                CASE
+                    WHEN regexp_like(t.t_undrawn_amt, t.amount_pattern)
+                        THEN to_number(t.t_undrawn_amt, t.amount_format, t.numeric_settings)
+                END AS undrawn_value,
+                CASE
+                    WHEN t.t_collateral_amt IS NULL THEN 0
+                    WHEN regexp_like(t.t_collateral_amt, t.amount_pattern)
+                        THEN to_number(t.t_collateral_amt, t.amount_format, t.numeric_settings)
+                END AS collateral_value
+            FROM trimmed t
+        ),
+
+        accepted_counterparties AS (
+            SELECT trim(cpty_id) AS cpty_id
+            FROM brz_counterparty
+            WHERE
+                load_id = p_cpty_load_id
+                AND NOT EXISTS (
+                    SELECT 1 FROM slv_rej_counterparty r
+                    WHERE r.load_id = brz_counterparty.load_id AND r.src_row = brz_counterparty.src_row
+                )
+        ),
+
+        checked AS (
+            SELECT
+                s.load_id,
+                s.src_row,
+                s.exposure_id,
+                s.cpty_id,
+                s.product_code,
+                s.drawn_amt,
+                s.undrawn_amt,
+                s.collateral_amt,
+                s.collateral_type,
+                s.currency,
+                s.as_of_date,
+                CASE
+                    WHEN
+                        s.t_exposure_id IS NULL OR length(s.t_exposure_id) > 30
+                        OR s.t_cpty_id IS NULL OR length(s.t_cpty_id) > 20
+                        THEN 'R01'
+                    WHEN s.drawn_value IS NULL OR s.undrawn_value IS NULL OR s.collateral_value IS NULL THEN 'R02'
+                    WHEN s.drawn_value < 0 OR s.undrawn_value < 0 OR s.collateral_value < 0 THEN 'R03'
+                    WHEN NOT EXISTS (
+                        SELECT 1 FROM ref_product r
+                        WHERE r.product_code = s.t_product_code
+                    ) THEN 'R04'
+                    WHEN s.t_as_of_date IS NULL OR s.t_as_of_date != s.partition_date THEN 'R05'
+                    WHEN count(*) OVER (PARTITION BY s.t_exposure_id) > 1 THEN 'R06'
+                    WHEN NOT EXISTS (
+                        SELECT 1 FROM accepted_counterparties a
+                        WHERE a.cpty_id = s.t_cpty_id
+                    ) THEN 'R07'
+                    WHEN s.collateral_value > 0 AND s.t_collateral_type IS NULL THEN 'R08'
+                    WHEN s.t_collateral_type IS NOT NULL AND NOT EXISTS (
+                        SELECT 1 FROM ref_collateral_type r
+                        WHERE r.collateral_type = s.t_collateral_type
+                    ) THEN 'R09'
+                    WHEN
+                        (s.t_product_code = 'LOAN' AND s.undrawn_value > 0)
+                        OR (s.t_product_code = 'GUARANTEE' AND s.drawn_value > 0)
+                        THEN 'R10'
+                    WHEN s.t_currency IS NULL OR s.t_currency != 'EUR' THEN 'R11'
+                END AS reason_code
+            FROM src s
+        )
+
+        SELECT
+            load_id,
+            src_row,
+            l_as_of,
+            reason_code,
+            exposure_id,
+            cpty_id,
+            product_code,
+            drawn_amt,
+            undrawn_amt,
+            collateral_amt,
+            collateral_type,
+            currency,
+            as_of_date
+        FROM checked
+        WHERE reason_code IS NOT NULL;
+        l_rejected := SQL%ROWCOUNT;
+        UPDATE ops_load_registry
+        SET rows_rejected = l_rejected
+        WHERE load_id = p_load_id;
         EXCEPTION
             WHEN OTHERS THEN
-                pkg_err.log_error(p_run_id, 'insert_counterparties');
+                pkg_err.log_error(p_run_id, 'reject_exposures');
                 RAISE;
-    END insert_counterparties;
+    END reject_exposures;
+
+    PROCEDURE replace_as_of(p_run_id IN NUMBER, p_cpty_load_id IN NUMBER, p_expo_load_id IN NUMBER) IS -- F3
+        l_as_of DATE := load_as_of(p_cpty_load_id, 'counterparty');
+    BEGIN
+        IF load_as_of(p_expo_load_id, 'exposure') != l_as_of THEN
+            raise_application_error(
+                c_as_of_mismatch, 'loads ' || p_cpty_load_id || ' and ' || p_expo_load_id || ' differ'
+            );
+        END IF;
+        DELETE FROM slv_exposure
+        WHERE as_of_date = l_as_of;
+        DELETE FROM slv_counterparty
+        WHERE as_of_date = l_as_of;
+        insert_counterparties(p_cpty_load_id, l_as_of);
+        insert_exposures(p_expo_load_id, l_as_of);
+        EXCEPTION
+            WHEN OTHERS THEN
+                pkg_err.log_error(p_run_id, 'replace_as_of');
+                RAISE;
+    END replace_as_of;
 END pkg_silver;
 /
