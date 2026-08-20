@@ -13,11 +13,14 @@ from srdwh.ingest.landing import Partition, StructuralError, partitions, read_de
 from srdwh.ingest.load import load
 from srdwh.ingest.registry import call, function, is_loaded
 from srdwh.log import Event, emit, run_end
+from srdwh.pipeline import silver
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
+EXIT_BREACH = 2
 LOCK_BUSY = 20101
 FAILURES = (ValueError, OSError, oracledb.Error)
+RUN_STATUS = {EXIT_OK: "OK", EXIT_FAILURE: "FAILED", EXIT_BREACH: "BREACH"}
 
 
 class LoadError(ValueError):
@@ -60,17 +63,29 @@ def _body(connection: oracledb.Connection, run_id: int, settings: Settings, data
     started_at = datetime.now(UTC)
     tag(connection, run_id, "run")
     emit(Event("run_start", "run", run_id=run_id), stream)
-    code = EXIT_OK
     try:
         call(connection, "fail_orphan_loads", run_id)
         connection.commit()
         ingest(connection, run_id, settings, data_dir / "landing", stream)
+        code = _silver_phases(connection, run_id, settings, stream)
     except FAILURES as error:
         connection.rollback()
         _report(stream, run_id, "run", error)
         code = EXIT_FAILURE
-    _log_step(connection, run_id, "run", None, started_at, None, "OK" if code == EXIT_OK else "FAILED")
+    _log_step(connection, run_id, "run", None, started_at, None, RUN_STATUS[code])
     return code
+
+
+def _silver_phases(connection: oracledb.Connection, run_id: int, settings: Settings, stream: TextIO) -> int:
+    tag(connection, run_id, "plan")
+    work = silver.plan(connection, None)
+    emit(Event("plan", "plan", run_id=run_id, rows=len(work)), stream)
+    breached = [silver.reject(connection, run_id, item, settings.reject_threshold, stream) for item in work]
+    if any(breached):
+        return EXIT_BREACH
+    for item in work:
+        silver.replace(connection, run_id, item, stream)
+    return EXIT_OK
 
 
 def _ingest_partition(

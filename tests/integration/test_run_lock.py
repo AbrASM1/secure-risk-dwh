@@ -1,21 +1,18 @@
 import json
-import secrets
 import signal
 import subprocess
 import sys
-from dataclasses import replace
+from collections.abc import Callable
 from pathlib import Path
 
 import oracledb
 import pytest
 
-from srdwh.config import load_settings
-from srdwh.generate.landing import write_landing
+from srdwh.config import Profile
 from tests.integration.db import Connect, rows
+from tests.integration.pipeline import landing
 
 pytestmark = pytest.mark.db
-SETTINGS = Path(__file__).resolve().parents[2] / "srdwh.toml"
-REF = SETTINGS.parent / "db" / "ref"
 SRDWH = Path(sys.executable).parent / "srdwh"
 COUNTS = (
     "SELECT (SELECT COUNT(*) FROM srdwh_owner.ops_load_registry), (SELECT COUNT(*) FROM srdwh_owner.ops_run_log), "
@@ -24,9 +21,8 @@ COUNTS = (
 
 
 @pytest.fixture
-def data_dir(tmp_path: Path) -> Path:
-    write_landing(replace(load_settings(SETTINGS).profile("ci"), seed=secrets.randbelow(10**9)), REF, tmp_path)
-    return tmp_path
+def data_dir(tmp_path: Path, pipeline_profile: Callable[[int], Profile]) -> Path:
+    return landing(tmp_path, pipeline_profile(3))
 
 
 def srdwh_run(data_dir: Path) -> subprocess.Popen[str]:

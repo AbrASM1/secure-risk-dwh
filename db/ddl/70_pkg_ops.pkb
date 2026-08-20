@@ -111,6 +111,54 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
                 RAISE;
     END fail_load;
 
+    FUNCTION silver_plan(p_rebuild_from IN DATE) RETURN SYS_REFCURSOR IS -- F8
+        l_plan SYS_REFCURSOR;
+    BEGIN
+        OPEN l_plan FOR
+            WITH latest AS (
+                SELECT
+                    as_of_date,
+                    max(CASE WHEN feed = 'counterparty' THEN load_id END) AS cpty_load_id,
+                    max(CASE WHEN feed = 'exposure' THEN load_id END) AS expo_load_id
+                FROM ops_load_registry
+                WHERE status = 'LOADED'
+                GROUP BY as_of_date
+            )
+
+            SELECT
+                l.as_of_date,
+                l.cpty_load_id,
+                l.expo_load_id
+            FROM latest l
+            LEFT JOIN ops_asof_state s ON l.as_of_date = s.as_of_date
+            WHERE
+                s.as_of_date IS NULL
+                OR decode(s.slv_cpty_load_id, l.cpty_load_id, 0, 1) = 1
+                OR decode(s.slv_expo_load_id, l.expo_load_id, 0, 1) = 1
+                OR l.as_of_date >= p_rebuild_from
+            ORDER BY l.as_of_date;
+        RETURN l_plan;
+    END silver_plan;
+
+    PROCEDURE record_silver(
+        p_run_id IN NUMBER, p_as_of_date IN DATE, p_cpty_load_id IN NUMBER, p_expo_load_id IN NUMBER
+    ) IS
+    BEGIN
+        MERGE INTO ops_asof_state s
+        USING (SELECT p_as_of_date AS as_of_date FROM dual) d
+        ON (s.as_of_date = d.as_of_date)
+        WHEN MATCHED THEN UPDATE SET
+            s.slv_cpty_load_id = p_cpty_load_id,
+            s.slv_expo_load_id = p_expo_load_id,
+            s.slv_at = systimestamp AT TIME ZONE 'UTC'
+        WHEN NOT MATCHED THEN INSERT (as_of_date, slv_cpty_load_id, slv_expo_load_id, slv_at)
+            VALUES (d.as_of_date, p_cpty_load_id, p_expo_load_id, systimestamp AT TIME ZONE 'UTC');
+    EXCEPTION
+        WHEN OTHERS THEN
+            pkg_err.log_error(p_run_id, 'record_silver');
+            RAISE;
+    END record_silver;
+
     PROCEDURE log_step(
         p_run_id IN NUMBER,
         p_step IN VARCHAR2,

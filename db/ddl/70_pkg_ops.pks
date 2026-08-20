@@ -25,6 +25,12 @@ CREATE OR REPLACE PACKAGE pkg_ops AUTHID DEFINER AS
 
     PROCEDURE fail_load(p_run_id IN NUMBER, p_load_id IN NUMBER, p_message IN VARCHAR2);
 
+    FUNCTION silver_plan(p_rebuild_from IN DATE) RETURN SYS_REFCURSOR;
+
+    PROCEDURE record_silver(
+        p_run_id IN NUMBER, p_as_of_date IN DATE, p_cpty_load_id IN NUMBER, p_expo_load_id IN NUMBER
+    );
+
     PROCEDURE log_step(
         p_run_id IN NUMBER,
         p_step IN VARCHAR2,

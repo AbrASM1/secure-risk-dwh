@@ -1,11 +1,12 @@
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import oracledb
 import pytest
 
-from srdwh.config import credentials
+from srdwh.config import Profile, credentials
 from tests.integration.db import Connect
+from tests.integration.pipeline import retire, unique_profile
 
 
 @pytest.fixture(scope="session")
@@ -22,3 +23,16 @@ def connect() -> Connect:
         return oracledb.connect(user=found.user, password=found.password, dsn=found.dsn)
 
     return open_as
+
+
+@pytest.fixture
+def pipeline_profile(system_connection: oracledb.Connection) -> Iterator[Callable[[int], Profile]]:
+    allocated: list[Profile] = []
+
+    def allocate(as_of_count: int = 1) -> Profile:
+        allocated.append(unique_profile(as_of_count))
+        return allocated[-1]
+
+    yield allocate
+    for profile in allocated:
+        retire(system_connection, profile)
