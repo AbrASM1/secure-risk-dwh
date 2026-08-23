@@ -69,7 +69,7 @@ def test_ops_identity_and_sequence(system_connection: oracledb.Connection) -> No
     identity = rows(
         system_connection,
         "SELECT table_name, column_name, generation_type FROM dba_tab_identity_cols "
-        "WHERE owner = 'SRDWH_OWNER' ORDER BY table_name",
+        "WHERE owner = 'SRDWH_OWNER' AND table_name LIKE 'OPS%' ORDER BY table_name",
     )
     assert identity == [
         ("OPS_ERR_LOG", "ERR_ID", "ALWAYS"),

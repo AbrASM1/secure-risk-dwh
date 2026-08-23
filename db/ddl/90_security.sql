@@ -4,3 +4,4 @@ GRANT INSERT, SELECT ON brz_exposure TO srdwh_etl;
 GRANT SELECT ON ops_load_registry TO srdwh_etl;
 GRANT EXECUTE ON pkg_ops TO srdwh_etl;
 GRANT EXECUTE ON pkg_silver TO srdwh_etl;
+GRANT EXECUTE ON pkg_gold TO srdwh_etl;
