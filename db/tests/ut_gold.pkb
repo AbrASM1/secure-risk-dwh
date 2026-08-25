@@ -18,6 +18,21 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
         VALUES (p_as_of, p_cpty_id, p_name, NULL, 'SME', 'FR', p_rating, p_default, 0, 1);
     END add_silver;
 
+    PROCEDURE add_exposure(p_as_of IN DATE, p_exposure_id IN VARCHAR2, p_cpty_id IN VARCHAR2) IS
+    BEGIN
+        INSERT INTO slv_exposure (
+            as_of_date, exposure_id, cpty_id, product_code, drawn_amt, undrawn_amt, collateral_amt,
+            collateral_type, currency, load_id, src_row
+        )
+        VALUES (p_as_of, p_exposure_id, p_cpty_id, 'LOAN', 1000, 0, 0, NULL, 'EUR', 0, 1);
+    END add_exposure;
+
+    PROCEDURE build(p_as_of IN DATE) IS
+        l_rows NUMBER;
+    BEGIN
+        pkg_gold.build_as_of(0, p_as_of, l_rows);
+    END build;
+
     PROCEDURE load(p_as_of IN DATE) IS
     BEGIN
         pkg_gold.load_counterparties(NULL, p_as_of);
@@ -144,5 +159,95 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
         WHERE next_from IS NOT NULL AND valid_to != next_from;
         ut.expect(l_gaps).to_equal(0);
     END contiguous_versions;
+
+    PROCEDURE fact_history IS
+    BEGIN
+        add_silver(c_jan, 'UTG1');
+        add_silver(c_jan, 'UTG2');
+        add_exposure(c_jan, 'UTGE1', 'UTG1');
+        add_exposure(c_jan, 'UTGE2', 'UTG2');
+        build(c_jan);
+        add_silver(c_feb, 'UTG1', p_rating => 'BB');
+        add_silver(c_feb, 'UTG2');
+        add_exposure(c_feb, 'UTGE1', 'UTG1');
+        add_exposure(c_feb, 'UTGE2', 'UTG2');
+        build(c_feb);
+        add_silver(c_mar, 'UTG1', p_rating => 'B');
+        add_exposure(c_mar, 'UTGE1', 'UTG1');
+        build(c_mar);
+    END fact_history;
+
+    PROCEDURE fact_grain_unique IS
+        l_rows NUMBER;
+        l_keys NUMBER;
+    BEGIN
+        fact_history;
+        build(c_mar);
+        SELECT count(*), count(DISTINCT exposure_id || '|' || as_of_date) INTO l_rows, l_keys
+        FROM gld_fact_exposure
+        WHERE exposure_id LIKE 'UTGE%';
+        ut.expect(l_rows).to_equal(5);
+        ut.expect(l_keys).to_equal(l_rows);
+    END fact_grain_unique;
+
+    PROCEDURE fact_on_valid_version IS
+        l_wrong NUMBER;
+    BEGIN
+        fact_history;
+        SELECT count(*) INTO l_wrong
+        FROM gld_fact_exposure f
+        INNER JOIN gld_dim_counterparty c ON f.cpty_sk = c.cpty_sk
+        WHERE NOT (f.as_of_date >= c.valid_from AND f.as_of_date < c.valid_to);
+        ut.expect(l_wrong).to_equal(0);
+    END fact_on_valid_version;
+
+    PROCEDURE counts_silver_fact_rwa IS
+        l_wrong NUMBER;
+    BEGIN
+        fact_history;
+        SELECT count(*) INTO l_wrong
+        FROM (
+            SELECT as_of_date, count(*) AS silver_rows
+            FROM slv_exposure
+            GROUP BY as_of_date
+        ) s
+        LEFT JOIN (
+            SELECT as_of_date, count(*) AS fact_rows
+            FROM gld_fact_exposure
+            GROUP BY as_of_date
+        ) f ON s.as_of_date = f.as_of_date
+        WHERE s.as_of_date IN (c_jan, c_feb, c_mar) AND decode(s.silver_rows, f.fact_rows, 0, 1) = 1;
+        ut.expect(l_wrong).to_equal(0);
+    END counts_silver_fact_rwa;
+
+    PROCEDURE segment_matches_version IS
+        l_wrong NUMBER;
+    BEGIN
+        fact_history;
+        SELECT count(*) INTO l_wrong
+        FROM gld_fact_exposure f
+        INNER JOIN gld_dim_counterparty c ON f.cpty_sk = c.cpty_sk
+        WHERE f.segment_code != c.segment_code;
+        ut.expect(l_wrong).to_equal(0);
+    END segment_matches_version;
+
+    PROCEDURE rewind_reopens_versions IS
+        l_reopened gld_dim_counterparty%ROWTYPE;
+        l_facts NUMBER;
+    BEGIN
+        fact_history;
+        pkg_gold.rewind(NULL, c_feb);
+        SELECT * INTO l_reopened
+        FROM gld_dim_counterparty
+        WHERE cpty_id = 'UTG1';
+        SELECT count(*) INTO l_facts
+        FROM gld_fact_exposure
+        WHERE as_of_date >= c_feb;
+        ut.expect(versions('UTG1')).to_equal(1);
+        ut.expect(l_reopened.valid_from).to_equal(c_jan);
+        ut.expect(l_reopened.valid_to).to_equal(pkg_gold.c_open_end);
+        ut.expect(l_reopened.is_current).to_equal('Y');
+        ut.expect(l_facts).to_equal(0);
+    END rewind_reopens_versions;
 END ut_gold;
 /

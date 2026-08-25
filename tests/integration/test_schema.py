@@ -88,3 +88,21 @@ def test_reference_loading_leaves_nothing_behind(system_connection: oracledb.Con
         rows(system_connection, "SELECT directory_name FROM dba_directories WHERE directory_name LIKE 'SRDWH%'") == []
     )
     assert rows(system_connection, "SELECT table_name FROM dba_external_tables WHERE owner = 'SRDWH_OWNER'") == []
+
+
+def test_interval_partition_creation_keeps_the_transaction_open(system_connection: oracledb.Connection) -> None:
+    partitions = (
+        "SELECT count(*) FROM dba_tab_partitions WHERE table_owner = 'SRDWH_OWNER' AND table_name = 'SLV_COUNTERPARTY'"
+    )
+    before = int(str(rows(system_connection, partitions)[0][0]))
+    with system_connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO srdwh_owner.slv_counterparty (as_of_date, cpty_id, cpty_name, segment_code, country, "
+            "rating, default_flag, load_id, src_row) "
+            "VALUES (DATE '2002-06-30', 'UW05', 'Probe SA', 'SME', 'FR', 'NR', 'N', 0, 1)"
+        )
+    created = int(str(rows(system_connection, partitions)[0][0]))
+    system_connection.rollback()
+    remaining = rows(system_connection, "SELECT count(*) FROM srdwh_owner.slv_counterparty WHERE cpty_id = 'UW05'")
+    assert created >= before
+    assert remaining == [(0,)]

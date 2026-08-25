@@ -75,6 +75,8 @@ def named(events: Events, event: str) -> Events:
 
 def retire(connection: oracledb.Connection, profile: Profile) -> None:
     with connection.cursor() as cursor:
+        cursor.callproc("srdwh_owner.pkg_ops.clear_gold", [None, profile.first_as_of])
+        cursor.callproc("srdwh_owner.pkg_gold.rewind", [None, profile.first_as_of])
         for statement in RETIRE:
             cursor.executemany(statement, [{"day": day} for day in profile.as_of_dates])
     connection.commit()

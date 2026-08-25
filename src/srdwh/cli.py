@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -7,6 +8,7 @@ import typer
 from srdwh.config import load_settings
 from srdwh.generate.landing import write_landing
 from srdwh.log import Event, emit, run_end
+from srdwh.pipeline.run import RunOptions
 from srdwh.pipeline.run import run as run_pipeline
 
 EXIT_OK = 0
@@ -37,10 +39,13 @@ def generate(
         raise typer.Exit(EXIT_FAILURE) from None
 
 
-@app.command(help="Ingest the landing into bronze under the run lock.")
+@app.command(help="Ingest the landing, then build silver and gold for every as_of to process, under the run lock.")
 def run(
     profile: Annotated[str, typer.Option(help="Profile of srdwh.toml.")],
     data_dir: Annotated[Path, typer.Option(help="Root of landing/.")] = Path("data"),
+    rebuild_from: Annotated[
+        datetime | None, typer.Option(formats=["%Y-%m-%d"], help="Rebuild silver and gold from this as_of.")
+    ] = None,
 ) -> None:
     try:
         settings = load_settings(SETTINGS)
@@ -49,7 +54,8 @@ def run(
         emit(Event("error", "config", level="ERROR", message=str(error)))
         run_end(None, EXIT_FAILURE, 0)
         raise typer.Exit(EXIT_FAILURE) from None
-    raise typer.Exit(run_pipeline(settings, data_dir))
+    options = RunOptions(settings, data_dir, rebuild_from.date() if rebuild_from else None)
+    raise typer.Exit(run_pipeline(options))
 
 
 def main() -> None:

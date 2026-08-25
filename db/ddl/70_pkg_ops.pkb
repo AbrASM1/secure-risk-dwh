@@ -1,6 +1,8 @@
 ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
 CREATE OR REPLACE PACKAGE BODY pkg_ops AS
     c_run_lock_id CONSTANT PLS_INTEGER := 7310001;
+    c_stats_tables CONSTANT VARCHAR2(200) := ',SLV_COUNTERPARTY,SLV_EXPOSURE,SLV_REJ_COUNTERPARTY,SLV_REJ_EXPOSURE,'
+        || 'GLD_DIM_COUNTERPARTY,GLD_FACT_EXPOSURE,';
 
     PROCEDURE lock_run IS
         l_status INTEGER;
@@ -158,6 +160,79 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
             pkg_err.log_error(p_run_id, 'record_silver');
             RAISE;
     END record_silver;
+
+    FUNCTION gold_start(p_rebuild_from IN DATE) RETURN DATE IS -- F8
+        l_start DATE;
+    BEGIN
+        SELECT min(as_of_date) INTO l_start
+        FROM ops_asof_state
+        WHERE
+            gld_cpty_load_id IS NULL
+            OR gld_cpty_load_id != slv_cpty_load_id
+            OR gld_expo_load_id != slv_expo_load_id
+            OR as_of_date >= p_rebuild_from;
+        RETURN l_start;
+    END gold_start;
+
+    FUNCTION gold_built_until RETURN DATE IS
+        l_until DATE;
+    BEGIN
+        SELECT max(as_of_date) INTO l_until
+        FROM ops_asof_state
+        WHERE gld_cpty_load_id IS NOT NULL;
+        RETURN l_until;
+    END gold_built_until;
+
+    FUNCTION gold_dates(p_from IN DATE) RETURN SYS_REFCURSOR IS
+        l_dates SYS_REFCURSOR;
+    BEGIN
+        OPEN l_dates FOR
+            SELECT as_of_date
+            FROM ops_asof_state
+            WHERE as_of_date >= p_from
+            ORDER BY as_of_date;
+        RETURN l_dates;
+    END gold_dates;
+
+    PROCEDURE clear_gold(p_run_id IN NUMBER, p_from IN DATE) IS
+    BEGIN
+        UPDATE ops_asof_state
+        SET
+            gld_cpty_load_id = NULL,
+            gld_expo_load_id = NULL,
+            gld_at = NULL
+        WHERE as_of_date >= p_from;
+    EXCEPTION
+        WHEN OTHERS THEN
+            pkg_err.log_error(p_run_id, 'clear_gold');
+            RAISE;
+    END clear_gold;
+
+    PROCEDURE record_gold(p_run_id IN NUMBER, p_as_of_date IN DATE) IS
+    BEGIN
+        UPDATE ops_asof_state
+        SET
+            gld_cpty_load_id = slv_cpty_load_id,
+            gld_expo_load_id = slv_expo_load_id,
+            gld_at = systimestamp AT TIME ZONE 'UTC'
+        WHERE as_of_date = p_as_of_date;
+    EXCEPTION
+        WHEN OTHERS THEN
+            pkg_err.log_error(p_run_id, 'record_gold');
+            RAISE;
+    END record_gold;
+
+    PROCEDURE gather_stats(p_run_id IN NUMBER, p_table IN VARCHAR2) IS -- F4
+    BEGIN
+        IF instr(c_stats_tables, ',' || upper(p_table) || ',') = 0 THEN
+            raise_application_error(c_unknown_table, 'statistics refused for ' || p_table);
+        END IF;
+        dbms_stats.gather_table_stats(ownname => 'SRDWH_OWNER', tabname => upper(p_table));
+    EXCEPTION
+        WHEN OTHERS THEN
+            pkg_err.log_error(p_run_id, 'gather_stats');
+            RAISE;
+    END gather_stats;
 
     PROCEDURE log_step(
         p_run_id IN NUMBER,

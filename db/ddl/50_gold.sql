@@ -7,7 +7,7 @@ CREATE TABLE gld_dim_date (
     quarter_no NUMBER(1) NOT NULL,
     year_no NUMBER(4) NOT NULL,
     is_month_end VARCHAR2 (1 CHAR) NOT NULL,
-    CONSTRAINT gld_dim_date_pk PRIMARY KEY (date_sk),
+    CONSTRAINT gld_dim_date_pk PRIMARY KEY (date_sk) RELY,
     CONSTRAINT gld_dim_date_calendar_date_uk UNIQUE (calendar_date),
     CONSTRAINT gld_dim_date_is_month_end_ck CHECK (is_month_end IN ('Y', 'N'))
 );
@@ -25,7 +25,7 @@ CREATE TABLE gld_dim_product (
     product_sk NUMBER(18) GENERATED ALWAYS AS IDENTITY,
     product_code VARCHAR2 (20 CHAR) NOT NULL,
     product_type VARCHAR2 (20 CHAR) NOT NULL,
-    CONSTRAINT gld_dim_product_pk PRIMARY KEY (product_sk),
+    CONSTRAINT gld_dim_product_pk PRIMARY KEY (product_sk) RELY,
     CONSTRAINT gld_dim_product_product_code_uk UNIQUE (product_code)
 );
 
@@ -46,7 +46,7 @@ CREATE TABLE gld_dim_counterparty (
     valid_from DATE NOT NULL,
     valid_to DATE NOT NULL,
     is_current VARCHAR2 (1 CHAR) NOT NULL,
-    CONSTRAINT gld_dim_counterparty_pk PRIMARY KEY (cpty_sk),
+    CONSTRAINT gld_dim_counterparty_pk PRIMARY KEY (cpty_sk) RELY,
     CONSTRAINT gld_dim_counterparty_cpty_id_valid_from_uk UNIQUE (cpty_id, valid_from),
     CONSTRAINT gld_dim_counterparty_default_flag_ck CHECK (default_flag IN ('Y', 'N')),
     CONSTRAINT gld_dim_counterparty_is_current_ck CHECK (is_current IN ('Y', 'N')),
@@ -74,6 +74,48 @@ COMMENT ON COLUMN gld_dim_counterparty.country IS 'Country, SCD1.';
 COMMENT ON COLUMN gld_dim_counterparty.valid_from IS 'First as_of of the version, inclusive.';
 COMMENT ON COLUMN gld_dim_counterparty.valid_to IS 'End of the version, exclusive; 9999-12-31 when open.';
 COMMENT ON COLUMN gld_dim_counterparty.is_current IS 'Y for the open version.';
+
+CREATE TABLE gld_fact_exposure (
+    as_of_date DATE NOT NULL,
+    date_sk NUMBER(8) NOT NULL,
+    cpty_sk NUMBER(18) NOT NULL,
+    product_sk NUMBER(18) NOT NULL,
+    segment_code VARCHAR2 (20 CHAR) NOT NULL,
+    exposure_id VARCHAR2 (30 CHAR) NOT NULL,
+    drawn_amt NUMBER(18,2) NOT NULL,
+    undrawn_amt NUMBER(18,2) NOT NULL,
+    collateral_amt NUMBER(18,2) NOT NULL,
+    collateral_type VARCHAR2 (20 CHAR),
+    run_id NUMBER(18) NOT NULL,
+    CONSTRAINT gld_fact_exposure_pk PRIMARY KEY (as_of_date, exposure_id) USING INDEX LOCAL,
+    CONSTRAINT gld_fact_exposure_date_sk_fk FOREIGN KEY (date_sk)
+        REFERENCES gld_dim_date (date_sk) RELY DISABLE NOVALIDATE,
+    CONSTRAINT gld_fact_exposure_cpty_sk_fk FOREIGN KEY (cpty_sk)
+        REFERENCES gld_dim_counterparty (cpty_sk) RELY DISABLE NOVALIDATE,
+    CONSTRAINT gld_fact_exposure_product_sk_fk FOREIGN KEY (product_sk)
+        REFERENCES gld_dim_product (product_sk) RELY DISABLE NOVALIDATE
+)
+PARTITION BY RANGE (as_of_date)
+INTERVAL (NUMTOYMINTERVAL(1, 'MONTH'))
+(PARTITION p_first VALUES LESS THAN (DATE '2000-02-01'));
+
+CREATE BITMAP INDEX gld_fact_exposure_date_sk_bx ON gld_fact_exposure (date_sk) LOCAL;
+CREATE BITMAP INDEX gld_fact_exposure_cpty_sk_bx ON gld_fact_exposure (cpty_sk) LOCAL;
+CREATE BITMAP INDEX gld_fact_exposure_product_sk_bx ON gld_fact_exposure (product_sk) LOCAL;
+CREATE BITMAP INDEX gld_fact_exposure_segment_code_bx ON gld_fact_exposure (segment_code) LOCAL;
+
+COMMENT ON TABLE gld_fact_exposure IS 'Monthly periodic snapshot, one row per exposure and as_of; amounts add across exposures, never across as_of (F4).';
+COMMENT ON COLUMN gld_fact_exposure.as_of_date IS 'As-of date.';
+COMMENT ON COLUMN gld_fact_exposure.date_sk IS 'Date key of as_of_date.';
+COMMENT ON COLUMN gld_fact_exposure.cpty_sk IS 'Counterparty version valid at as_of_date.';
+COMMENT ON COLUMN gld_fact_exposure.product_sk IS 'Product.';
+COMMENT ON COLUMN gld_fact_exposure.segment_code IS 'Segment of the counterparty version, denormalised for VPD.';
+COMMENT ON COLUMN gld_fact_exposure.exposure_id IS 'Exposure identifier.';
+COMMENT ON COLUMN gld_fact_exposure.drawn_amt IS 'Drawn amount, EUR.';
+COMMENT ON COLUMN gld_fact_exposure.undrawn_amt IS 'Undrawn amount, EUR.';
+COMMENT ON COLUMN gld_fact_exposure.collateral_amt IS 'Collateral amount, EUR.';
+COMMENT ON COLUMN gld_fact_exposure.collateral_type IS 'Collateral type, empty without collateral.';
+COMMENT ON COLUMN gld_fact_exposure.run_id IS 'Run that wrote the row.';
 
 INSERT INTO gld_dim_date (date_sk, calendar_date, month_no, quarter_no, year_no, is_month_end)
 SELECT

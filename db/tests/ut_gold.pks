@@ -1,6 +1,6 @@
 ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
 CREATE OR REPLACE PACKAGE ut_gold AUTHID DEFINER AS
-    --%suite(pkg_gold counterparty dimension)
+    --%suite(pkg_gold dimensions, facts and rewind)
 
     --%test(a change of segment, rating or default closes the current version and opens one at the as_of)
     PROCEDURE scd2_new_version_on_change;
@@ -19,5 +19,20 @@ CREATE OR REPLACE PACKAGE ut_gold AUTHID DEFINER AS
 
     --%test(each closed version ends where the next one starts)
     PROCEDURE contiguous_versions;
+
+    --%test(one fact row per exposure and as_of, even when an as_of is built twice)
+    PROCEDURE fact_grain_unique;
+
+    --%test(each fact points to the counterparty version valid at its as_of)
+    PROCEDURE fact_on_valid_version;
+
+    --%test(per as_of, silver exposures equal fact rows)
+    PROCEDURE counts_silver_fact_rwa;
+
+    --%test(the segment of a fact equals the segment of its counterparty version)
+    PROCEDURE segment_matches_version;
+
+    --%test(rewind from D deletes facts and versions from D and reopens the version covering D)
+    PROCEDURE rewind_reopens_versions;
 END ut_gold;
 /

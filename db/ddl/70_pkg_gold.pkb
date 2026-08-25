@@ -60,5 +60,86 @@ CREATE OR REPLACE PACKAGE BODY pkg_gold AS
                 pkg_err.log_error(p_run_id, 'load_counterparties');
                 RAISE;
     END load_counterparties;
+
+    PROCEDURE load_facts(p_run_id IN NUMBER, p_as_of_date IN DATE) IS
+    BEGIN
+        DELETE FROM gld_fact_exposure
+        WHERE as_of_date = p_as_of_date;
+        INSERT INTO gld_fact_exposure (
+            as_of_date, date_sk, cpty_sk, product_sk, segment_code, exposure_id,
+            drawn_amt, undrawn_amt, collateral_amt, collateral_type, run_id
+        )
+        WITH params AS (
+            SELECT
+                p_as_of_date AS as_of_date,
+                p_run_id AS run_id
+            FROM dual
+        )
+
+        SELECT
+            s.as_of_date,
+            d.date_sk,
+            c.cpty_sk,
+            p.product_sk,
+            c.segment_code,
+            s.exposure_id,
+            s.drawn_amt,
+            s.undrawn_amt,
+            s.collateral_amt,
+            s.collateral_type,
+            x.run_id
+        FROM params x
+        INNER JOIN slv_exposure s ON x.as_of_date = s.as_of_date
+        INNER JOIN gld_dim_date d ON s.as_of_date = d.calendar_date
+        INNER JOIN gld_dim_counterparty c
+            ON s.cpty_id = c.cpty_id AND s.as_of_date >= c.valid_from AND s.as_of_date < c.valid_to
+        INNER JOIN gld_dim_product p ON s.product_code = p.product_code;
+    END load_facts;
+
+    FUNCTION checked_facts(p_as_of_date IN DATE) RETURN NUMBER IS
+        l_silver NUMBER;
+        l_facts NUMBER;
+    BEGIN
+        SELECT count(*) INTO l_silver
+        FROM slv_exposure
+        WHERE as_of_date = p_as_of_date;
+        SELECT count(*) INTO l_facts
+        FROM gld_fact_exposure
+        WHERE as_of_date = p_as_of_date;
+        IF l_silver != l_facts THEN
+            raise_application_error(
+                c_counts, to_char(p_as_of_date, 'YYYY-MM-DD') || ': ' || l_silver || ' silver, ' || l_facts || ' facts'
+            );
+        END IF;
+        RETURN l_facts;
+    END checked_facts;
+
+    PROCEDURE build_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE, p_rows OUT NUMBER) IS -- F4
+    BEGIN
+        load_counterparties(p_run_id, p_as_of_date);
+        load_facts(p_run_id, p_as_of_date);
+        p_rows := checked_facts(p_as_of_date);
+        EXCEPTION
+            WHEN OTHERS THEN
+                pkg_err.log_error(p_run_id, 'build_as_of');
+                RAISE;
+    END build_as_of;
+
+    PROCEDURE rewind(p_run_id IN NUMBER, p_from IN DATE) IS -- F4
+    BEGIN
+        DELETE FROM gld_fact_exposure
+        WHERE as_of_date >= p_from;
+        DELETE FROM gld_dim_counterparty
+        WHERE valid_from >= p_from;
+        UPDATE gld_dim_counterparty
+        SET
+            valid_to = c_open_end,
+            is_current = 'Y'
+        WHERE valid_from < p_from AND valid_to >= p_from AND valid_to < c_open_end;
+        EXCEPTION
+            WHEN OTHERS THEN
+                pkg_err.log_error(p_run_id, 'rewind');
+                RAISE;
+    END rewind;
 END pkg_gold;
 /

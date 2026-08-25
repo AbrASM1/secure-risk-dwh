@@ -1,4 +1,8 @@
+import json
 import shutil
+import signal
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -21,6 +25,17 @@ SILVER_CHECKSUM = """
     FROM srdwh_owner.slv_exposure GROUP BY as_of_date
     ORDER BY 1, 2"""
 STATE = "SELECT as_of_date, slv_cpty_load_id, slv_expo_load_id FROM srdwh_owner.ops_asof_state ORDER BY 1"
+GOLD_CHECKSUM = """
+    SELECT f.as_of_date, count(*),
+        sum(ora_hash(f.exposure_id || '|' || f.drawn_amt || '|' || c.cpty_id || '|' || c.rating))
+    FROM srdwh_owner.gld_fact_exposure f JOIN srdwh_owner.gld_dim_counterparty c ON f.cpty_sk = c.cpty_sk
+    WHERE f.as_of_date BETWEEN :first AND :last GROUP BY f.as_of_date ORDER BY 1"""
+GOLD_STATE = """
+    SELECT TO_CHAR(s.as_of_date, 'YYYY-MM-DD'), s.gld_cpty_load_id - s.slv_cpty_load_id,
+        s.gld_expo_load_id - s.slv_expo_load_id,
+        (SELECT count(*) FROM srdwh_owner.slv_exposure x WHERE x.as_of_date = s.as_of_date),
+        (SELECT count(*) FROM srdwh_owner.gld_fact_exposure f WHERE f.as_of_date = s.as_of_date)
+    FROM srdwh_owner.ops_asof_state s WHERE s.as_of_date BETWEEN :first AND :last ORDER BY 1"""
 
 
 def degrade(frame: pl.DataFrame) -> pl.DataFrame:
@@ -112,3 +127,50 @@ def test_missing_feed_exit_1(
     assert f"a feed is missing for as_of {profile.first_as_of.isoformat()}" in str(named(events, "error")[0]["message"])
     shutil.move(held, tmp_path / "landing" / partition_folder("exposure", profile.first_as_of))
     assert run(tmp_path, capsys, monkeypatch)[0] == 0
+
+
+def window(profile: Profile) -> dict[str, object]:
+    return {"first": profile.first_as_of, "last": profile.as_of_dates[-1]}
+
+
+def test_rerun_noop(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(3)
+    code, events = run(landing(tmp_path, profile), capsys, monkeypatch)
+    assert code == 0
+    assert [e["as_of"] for e in named(events, "gold_end")] == [d.isoformat() for d in profile.as_of_dates]
+    gold = rows(system_connection, GOLD_CHECKSUM, **window(profile))
+    assert len(gold) == 3
+    code, events = run(tmp_path, capsys, monkeypatch)
+    assert code == 0
+    assert (len(named(events, "load_skipped")), named(events, "silver_end"), named(events, "gold_end")) == (6, [], [])
+    assert rows(system_connection, GOLD_CHECKSUM, **window(profile)) == gold
+
+
+def test_interrupted_run_resumes(
+    tmp_path: Path,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(3)
+    landing(tmp_path, profile)
+    command = [str(Path(sys.executable).parent / "srdwh"), "run", "--profile", "ci", "--data-dir", str(tmp_path)]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)
+    assert process.stdout is not None
+    for line in process.stdout:
+        if json.loads(line)["event"] == "gold_end":
+            process.send_signal(signal.SIGKILL)
+            break
+    process.wait(timeout=60)
+    rerun = subprocess.run(command, capture_output=True, text=True, timeout=300, check=False)
+    assert rerun.returncode == 0, rerun.stdout
+    state = rows(system_connection, GOLD_STATE, **window(profile))
+    assert state == [
+        (day.isoformat(), 0, 0, silver, silver)
+        for day, (_, _, _, silver, _) in zip(profile.as_of_dates, state, strict=True)
+    ]

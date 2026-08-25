@@ -1,7 +1,7 @@
 import sys
 import time
-from dataclasses import replace
-from datetime import UTC, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TextIO
 
@@ -13,7 +13,7 @@ from srdwh.ingest.landing import Partition, StructuralError, partitions, read_de
 from srdwh.ingest.load import load
 from srdwh.ingest.registry import call, function, is_loaded
 from srdwh.log import Event, emit, run_end
-from srdwh.pipeline import silver
+from srdwh.pipeline import gold, silver
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -27,12 +27,19 @@ class LoadError(ValueError):
     pass
 
 
-def run(settings: Settings, data_dir: Path, stream: TextIO | None = None) -> int:
+@dataclass(frozen=True)
+class RunOptions:
+    settings: Settings
+    data_dir: Path
+    rebuild_from: date | None = None
+
+
+def run(options: RunOptions, stream: TextIO | None = None) -> int:
     started, out = time.monotonic(), stream or sys.stdout
     run_id, code = None, EXIT_FAILURE
     try:
         with connect(credentials("SRDWH_ETL"), None, "lock") as connection:
-            run_id, code = _locked(connection, settings, data_dir, out)
+            run_id, code = _locked(connection, options, out)
     except FAILURES as error:
         _report(out, run_id, "run", error)
     run_end(run_id, code, _elapsed_ms(started), out)
@@ -45,9 +52,7 @@ def ingest(connection: oracledb.Connection, run_id: int, settings: Settings, lan
         _ingest_partition(connection, run_id, settings.batch_size, partition, stream)
 
 
-def _locked(
-    connection: oracledb.Connection, settings: Settings, data_dir: Path, stream: TextIO
-) -> tuple[int | None, int]:
+def _locked(connection: oracledb.Connection, options: RunOptions, stream: TextIO) -> tuple[int | None, int]:
     try:
         call(connection, "lock_run")
     except oracledb.DatabaseError as error:
@@ -56,18 +61,18 @@ def _locked(
         emit(Event("lock_busy", "lock", level="ERROR", message="another run holds the run lock"), stream)
         return None, EXIT_FAILURE
     run_id = function(connection, "start_run")
-    return run_id, _body(connection, run_id, settings, data_dir, stream)
+    return run_id, _body(connection, run_id, options, stream)
 
 
-def _body(connection: oracledb.Connection, run_id: int, settings: Settings, data_dir: Path, stream: TextIO) -> int:
+def _body(connection: oracledb.Connection, run_id: int, options: RunOptions, stream: TextIO) -> int:
     started_at = datetime.now(UTC)
     tag(connection, run_id, "run")
     emit(Event("run_start", "run", run_id=run_id), stream)
     try:
         call(connection, "fail_orphan_loads", run_id)
         connection.commit()
-        ingest(connection, run_id, settings, data_dir / "landing", stream)
-        code = _silver_phases(connection, run_id, settings, stream)
+        ingest(connection, run_id, options.settings, options.data_dir / "landing", stream)
+        code = _phases(connection, run_id, options, stream)
     except FAILURES as error:
         connection.rollback()
         _report(stream, run_id, "run", error)
@@ -76,15 +81,19 @@ def _body(connection: oracledb.Connection, run_id: int, settings: Settings, data
     return code
 
 
-def _silver_phases(connection: oracledb.Connection, run_id: int, settings: Settings, stream: TextIO) -> int:
+def _phases(connection: oracledb.Connection, run_id: int, options: RunOptions, stream: TextIO) -> int:
     tag(connection, run_id, "plan")
-    work = silver.plan(connection, None)
+    work = silver.plan(connection, options.rebuild_from)
     emit(Event("plan", "plan", run_id=run_id, rows=len(work)), stream)
-    breached = [silver.reject(connection, run_id, item, settings.reject_threshold, stream) for item in work]
+    threshold = options.settings.reject_threshold
+    breached = [silver.reject(connection, run_id, item, threshold, stream) for item in work]
     if any(breached):
         return EXIT_BREACH
     for item in work:
         silver.replace(connection, run_id, item, stream)
+    if work:
+        gold.gather_stats(connection, run_id, gold.SILVER_TABLES)
+    gold.gold(connection, run_id, options.rebuild_from, stream)
     return EXIT_OK
 
 
