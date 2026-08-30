@@ -11,9 +11,9 @@ import polars as pl
 import pytest
 
 from srdwh.config import Profile
-from srdwh.contracts.landing import partition_folder
+from srdwh.contracts.landing import EXPECTED, partition_folder
 from tests.integration.db import rows
-from tests.integration.pipeline import landing, named, rewrite, run
+from tests.integration.pipeline import landing, named, retire, rewrite, run
 
 pytestmark = pytest.mark.db
 SILVER_CHECKSUM = """
@@ -174,3 +174,98 @@ def test_interrupted_run_resumes(
         (day.isoformat(), 0, 0, silver, silver)
         for day, (_, _, _, silver, _) in zip(profile.as_of_dates, state, strict=True)
     ]
+
+
+REJECTS = {
+    "counterparty": "SELECT src_row, reason_code FROM srdwh_owner.slv_rej_counterparty WHERE load_id = :load_id",
+    "exposure": "SELECT src_row, reason_code FROM srdwh_owner.slv_rej_exposure WHERE load_id = :load_id",
+}
+LEAKED = {
+    "counterparty": "SELECT count(*) FROM srdwh_owner.slv_counterparty s JOIN srdwh_owner.slv_rej_counterparty r "
+    "ON r.load_id = s.load_id AND r.src_row = s.src_row WHERE s.load_id = :load_id",
+    "exposure": "SELECT count(*) FROM srdwh_owner.slv_exposure s JOIN srdwh_owner.slv_rej_exposure r "
+    "ON r.load_id = s.load_id AND r.src_row = s.src_row WHERE s.load_id = :load_id",
+}
+DIMENSION = """
+    SELECT count(*), sum(ora_hash(cpty_id || '|' || segment_code || '|' || rating || '|' || default_flag || '|'
+        || cpty_name || '|' || lei || '|' || country || '|' || valid_from || '|' || valid_to || '|' || is_current))
+    FROM srdwh_owner.gld_dim_counterparty WHERE valid_to > :first"""
+FACTS = """
+    SELECT f.as_of_date, count(*), sum(ora_hash(f.exposure_id || '|' || f.segment_code || '|' || f.drawn_amt || '|'
+        || f.undrawn_amt || '|' || f.collateral_amt || '|' || f.collateral_type || '|' || c.cpty_id || '|'
+        || c.valid_from || '|' || p.product_code || '|' || d.calendar_date))
+    FROM srdwh_owner.gld_fact_exposure f
+    JOIN srdwh_owner.gld_dim_counterparty c ON f.cpty_sk = c.cpty_sk
+    JOIN srdwh_owner.gld_dim_product p ON f.product_sk = p.product_sk
+    JOIN srdwh_owner.gld_dim_date d ON f.date_sk = d.date_sk
+    WHERE f.as_of_date BETWEEN :first AND :last GROUP BY f.as_of_date ORDER BY 1"""
+
+
+def checksums(connection: oracledb.Connection, profile: Profile) -> tuple[object, ...]:
+    window = {"first": profile.first_as_of, "last": profile.as_of_dates[-1]}
+    return rows(connection, DIMENSION, first=profile.first_as_of)[0], tuple(rows(connection, FACTS, **window))
+
+
+def downgrade(frame: pl.DataFrame) -> pl.DataFrame:
+    changed = (pl.int_range(pl.len()) % 7 == 0) & (pl.col("rating") == "BBB")
+    return frame.with_columns(pl.when(changed).then(pl.lit("BB")).otherwise(pl.col("rating")).alias("rating"))
+
+
+def test_ground_truth_rejects(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(3)
+    code, events = run(landing(tmp_path, profile), capsys, monkeypatch)
+    assert code == 0
+    for event in named(events, "load_end"):
+        feed, as_of = str(event["feed"]), profile.first_as_of.fromisoformat(str(event["as_of"]))
+        expected = pl.read_parquet(tmp_path / "ground_truth" / partition_folder(feed, as_of) / EXPECTED)
+        stored = sorted(
+            (int(str(r)), str(c)) for r, c in rows(system_connection, REJECTS[feed], load_id=event["load_id"])
+        )
+        assert stored == sorted(expected.rows()), (feed, as_of)
+        assert rows(system_connection, LEAKED[feed], load_id=event["load_id"]) == [(0,)]
+    assert len(named(events, "gold_end")) == 3
+
+
+def test_rebuild_from_equals_full_run(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(3)
+    assert run(landing(tmp_path, profile), capsys, monkeypatch)[0] == 0
+    full = checksums(system_connection, profile)
+    code, events = run(tmp_path, capsys, monkeypatch, "--rebuild-from", profile.first_as_of.isoformat())
+    assert code == 0
+    days = [d.isoformat() for d in profile.as_of_dates]
+    assert [e["as_of"] for e in named(events, "silver_end") if e["as_of"] in days] == days
+    assert [e["as_of"] for e in named(events, "gold_end") if e["as_of"] in days] == days
+    assert checksums(system_connection, profile) == full
+
+
+def test_late_correction_equals_full_run(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(3)
+    assert run(landing(tmp_path, profile), capsys, monkeypatch)[0] == 0
+    rewrite(tmp_path, "counterparty", profile.first_as_of, downgrade)
+    code, events = run(tmp_path, capsys, monkeypatch)
+    assert code == 0
+    assert [e["as_of"] for e in named(events, "rewind_end")] == [profile.first_as_of.isoformat()]
+    corrected = checksums(system_connection, profile)
+    retire(system_connection, profile)
+    code, events = run(tmp_path, capsys, monkeypatch)
+    assert code == 0
+    assert len(named(events, "load_end")) == 6
+    assert checksums(system_connection, profile) == corrected

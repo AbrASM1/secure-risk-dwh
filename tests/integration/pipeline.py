@@ -48,9 +48,11 @@ def landing(data_dir: Path, profile: Profile) -> Path:
     return data_dir
 
 
-def run(data_dir: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> tuple[int, Events]:
+def run(
+    data_dir: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, *extra: str
+) -> tuple[int, Events]:
     capsys.readouterr()
-    monkeypatch.setattr("sys.argv", ["srdwh", "run", "--profile", "ci", "--data-dir", str(data_dir)])
+    monkeypatch.setattr("sys.argv", ["srdwh", "run", "--profile", "ci", "--data-dir", str(data_dir), *extra])
     with pytest.raises(SystemExit) as stop:
         main()
     events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
