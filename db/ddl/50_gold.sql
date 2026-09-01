@@ -87,7 +87,7 @@ CREATE TABLE gld_fact_exposure (
     collateral_amt NUMBER(18,2) NOT NULL,
     collateral_type VARCHAR2 (20 CHAR),
     run_id NUMBER(18) NOT NULL,
-    CONSTRAINT gld_fact_exposure_pk PRIMARY KEY (as_of_date, exposure_id) USING INDEX LOCAL,
+    CONSTRAINT gld_fact_exposure_pk PRIMARY KEY (as_of_date, exposure_id) RELY USING INDEX LOCAL,
     CONSTRAINT gld_fact_exposure_date_sk_fk FOREIGN KEY (date_sk)
         REFERENCES gld_dim_date (date_sk) RELY DISABLE NOVALIDATE,
     CONSTRAINT gld_fact_exposure_cpty_sk_fk FOREIGN KEY (cpty_sk)
@@ -116,6 +116,60 @@ COMMENT ON COLUMN gld_fact_exposure.undrawn_amt IS 'Undrawn amount, EUR.';
 COMMENT ON COLUMN gld_fact_exposure.collateral_amt IS 'Collateral amount, EUR.';
 COMMENT ON COLUMN gld_fact_exposure.collateral_type IS 'Collateral type, empty without collateral.';
 COMMENT ON COLUMN gld_fact_exposure.run_id IS 'Run that wrote the row.';
+
+CREATE TABLE gld_fact_rwa (
+    as_of_date DATE NOT NULL,
+    date_sk NUMBER(8) NOT NULL,
+    cpty_sk NUMBER(18) NOT NULL,
+    product_sk NUMBER(18) NOT NULL,
+    segment_code VARCHAR2 (20 CHAR) NOT NULL,
+    exposure_id VARCHAR2 (30 CHAR) NOT NULL,
+    exposure_class VARCHAR2 (20 CHAR) NOT NULL,
+    rating_bucket VARCHAR2 (20 CHAR) NOT NULL,
+    ccf NUMBER(5,4) NOT NULL,
+    ead NUMBER(30,6) NOT NULL,
+    hc NUMBER(5,4) NOT NULL,
+    e_star NUMBER(30,6) NOT NULL,
+    risk_weight NUMBER(6,4) NOT NULL,
+    rwa NUMBER(20,2) NOT NULL,
+    param_version NUMBER(4) NOT NULL,
+    run_id NUMBER(18) NOT NULL,
+    CONSTRAINT gld_fact_rwa_pk PRIMARY KEY (as_of_date, exposure_id) USING INDEX LOCAL,
+    CONSTRAINT gld_fact_rwa_as_of_date_exposure_id_fk FOREIGN KEY (as_of_date, exposure_id)
+        REFERENCES gld_fact_exposure (as_of_date, exposure_id) RELY DISABLE NOVALIDATE,
+    CONSTRAINT gld_fact_rwa_date_sk_fk FOREIGN KEY (date_sk)
+        REFERENCES gld_dim_date (date_sk) RELY DISABLE NOVALIDATE,
+    CONSTRAINT gld_fact_rwa_cpty_sk_fk FOREIGN KEY (cpty_sk)
+        REFERENCES gld_dim_counterparty (cpty_sk) RELY DISABLE NOVALIDATE,
+    CONSTRAINT gld_fact_rwa_product_sk_fk FOREIGN KEY (product_sk)
+        REFERENCES gld_dim_product (product_sk) RELY DISABLE NOVALIDATE
+)
+PARTITION BY RANGE (as_of_date)
+INTERVAL (NUMTOYMINTERVAL(1, 'MONTH'))
+(PARTITION p_first VALUES LESS THAN (DATE '2000-02-01'));
+
+CREATE BITMAP INDEX gld_fact_rwa_date_sk_bx ON gld_fact_rwa (date_sk) LOCAL;
+CREATE BITMAP INDEX gld_fact_rwa_cpty_sk_bx ON gld_fact_rwa (cpty_sk) LOCAL;
+CREATE BITMAP INDEX gld_fact_rwa_product_sk_bx ON gld_fact_rwa (product_sk) LOCAL;
+CREATE BITMAP INDEX gld_fact_rwa_segment_code_bx ON gld_fact_rwa (segment_code) LOCAL;
+
+COMMENT ON TABLE gld_fact_rwa IS 'Standardised credit RWA per exposure and as_of, same grain and keys as GLD_FACT_EXPOSURE (F5).';
+COMMENT ON COLUMN gld_fact_rwa.as_of_date IS 'As-of date.';
+COMMENT ON COLUMN gld_fact_rwa.date_sk IS 'Date key of as_of_date.';
+COMMENT ON COLUMN gld_fact_rwa.cpty_sk IS 'Counterparty version valid at as_of_date.';
+COMMENT ON COLUMN gld_fact_rwa.product_sk IS 'Product.';
+COMMENT ON COLUMN gld_fact_rwa.segment_code IS 'Segment, denormalised for VPD.';
+COMMENT ON COLUMN gld_fact_rwa.exposure_id IS 'Exposure identifier.';
+COMMENT ON COLUMN gld_fact_rwa.exposure_class IS 'DEFAULTED when default_flag = Y, else segment_code.';
+COMMENT ON COLUMN gld_fact_rwa.rating_bucket IS 'Rating bucket from REF_RATING.';
+COMMENT ON COLUMN gld_fact_rwa.ccf IS 'Credit conversion factor of the product.';
+COMMENT ON COLUMN gld_fact_rwa.ead IS 'drawn_amt + ccf x undrawn_amt, unrounded.';
+COMMENT ON COLUMN gld_fact_rwa.hc IS 'Haircut of the collateral type, 0 without collateral.';
+COMMENT ON COLUMN gld_fact_rwa.e_star IS 'Exposure after credit risk mitigation, unrounded.';
+COMMENT ON COLUMN gld_fact_rwa.risk_weight IS 'Risk weight of exposure_class and rating_bucket.';
+COMMENT ON COLUMN gld_fact_rwa.rwa IS 'ROUND(e_star x risk_weight, 2).';
+COMMENT ON COLUMN gld_fact_rwa.param_version IS 'Parameter set valid at as_of_date.';
+COMMENT ON COLUMN gld_fact_rwa.run_id IS 'Run that wrote the row.';
 
 INSERT INTO gld_dim_date (date_sk, calendar_date, month_no, quarter_no, year_no, is_month_end)
 SELECT

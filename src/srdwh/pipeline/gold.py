@@ -10,7 +10,8 @@ from srdwh.log import Event, emit
 
 OPS = "srdwh_owner.pkg_ops"
 GOLD = "srdwh_owner.pkg_gold"
-GOLD_TABLES = ("GLD_DIM_COUNTERPARTY", "GLD_FACT_EXPOSURE")
+RWA = "srdwh_owner.pkg_rwa"
+GOLD_TABLES = ("GLD_DIM_COUNTERPARTY", "GLD_FACT_EXPOSURE", "GLD_FACT_RWA")
 SILVER_TABLES = ("SLV_COUNTERPARTY", "SLV_EXPOSURE", "SLV_REJ_COUNTERPARTY", "SLV_REJ_EXPOSURE")
 
 
@@ -48,8 +49,10 @@ def _build(connection: oracledb.Connection, run_id: int, as_of: date, stream: Te
     tag(connection, run_id, "gold")
     started, started_at = time.monotonic(), datetime.now(UTC)
     with connection.cursor() as cursor:
+        cursor.callproc(f"{GOLD}.build_as_of", [run_id, as_of])
+        cursor.callproc(f"{RWA}.compute", [run_id, as_of])
         built = cursor.var(int)
-        cursor.callproc(f"{GOLD}.build_as_of", [run_id, as_of, built])
+        cursor.callproc(f"{GOLD}.finish_as_of", [run_id, as_of, built])
         rows = int(built.getvalue())
     call(connection, "log_step", run_id, "gold", as_of, started_at, None, rows, None, "OK", None)
     connection.commit()

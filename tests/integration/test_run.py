@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 from srdwh.config import Profile
-from srdwh.contracts.landing import EXPECTED, partition_folder
+from srdwh.contracts.landing import DATA_FILE, EXPECTED, partition_folder
 from tests.integration.db import rows
 from tests.integration.pipeline import landing, named, retire, rewrite, run
 
@@ -269,3 +269,79 @@ def test_late_correction_equals_full_run(
     assert code == 0
     assert len(named(events, "load_end")) == 6
     assert checksums(system_connection, profile) == corrected
+
+
+MESSAGES = """
+    SELECT message FROM srdwh_owner.ops_run_log WHERE run_id = :run_id AND message IS NOT NULL
+    UNION ALL
+    SELECT message || ' ' || backtrace FROM srdwh_owner.ops_err_log WHERE run_id = :run_id"""
+LINEAGE = """
+    SELECT r.exposure_id, s.cpty_id, s.src_row, g.file_path, r.run_id, r.param_version
+    FROM srdwh_owner.gld_fact_rwa r
+    JOIN srdwh_owner.slv_exposure s ON s.as_of_date = r.as_of_date AND s.exposure_id = r.exposure_id
+    JOIN srdwh_owner.ops_load_registry g ON g.load_id = s.load_id
+    WHERE r.as_of_date = :as_of"""
+
+
+def identities(data_dir: Path) -> set[str]:
+    frames = pl.concat(pl.read_parquet(path) for path in data_dir.glob(f"landing/counterparty/*/{DATA_FILE}"))
+    values = pl.concat([frames["cpty_name"], frames["lei"]]).drop_nulls()
+    return set(values.filter(values != "").to_list())
+
+
+def oversize(times: int) -> Callable[[pl.DataFrame], pl.DataFrame]:
+    def change(frame: pl.DataFrame) -> pl.DataFrame:
+        first = pl.int_range(pl.len()) == 0
+        name = pl.concat_str([pl.col("cpty_name")] * times)
+        lei = pl.concat_str([pl.col("lei"), pl.col("lei")])
+        return frame.with_columns(
+            pl.when(first).then(name).otherwise(pl.col("cpty_name")).alias("cpty_name"), lei.alias("lei")
+        )
+
+    return change
+
+
+def test_errors_without_names(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(2)
+    hidden = identities(landing(tmp_path, profile))
+    rewrite(tmp_path, "counterparty", profile.first_as_of, oversize(20))
+    rejected_code, rejected = run(tmp_path, capsys, monkeypatch)
+    rewrite(tmp_path, "counterparty", profile.first_as_of, oversize(200))
+    failed_code, failed = run(tmp_path, capsys, monkeypatch)
+    assert (rejected_code, failed_code) == (2, 1)
+    (failure,) = named(failed, "structural_check_failed")
+    assert "column=cpty_name check=max_bytes rows=1 first_src_row=1" in str(failure["message"])
+    stored = [rows(system_connection, MESSAGES, run_id=events[0]["run_id"]) for events in (rejected, failed)]
+    text = json.dumps([rejected, failed, stored], default=str)
+    assert len(hidden) > 100
+    assert [value for value in hidden if value in text] == []
+
+
+def test_lineage_fact_to_file_row(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    system_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    profile = pipeline_profile(1)
+    code, events = run(landing(tmp_path, profile), capsys, monkeypatch)
+    assert code == 0
+    schema = ["exposure_id", "cpty_id", "src_row", "file_path", "run_id", "param_version"]
+    traced = pl.DataFrame(rows(system_connection, LINEAGE, as_of=profile.first_as_of), schema=schema, orient="row")
+    (file_path,) = traced["file_path"].unique().to_list()
+    delivered = pl.read_parquet(tmp_path / "landing" / file_path).with_row_index("src_row", offset=1)
+    joined = traced.join(delivered.cast({"src_row": pl.Int64}), on="src_row", suffix="_file")
+    mismatched = joined.filter(
+        (pl.col("exposure_id") != pl.col("exposure_id_file")) | (pl.col("cpty_id") != pl.col("cpty_id_file"))
+    )
+    assert joined.height == traced.height > 0
+    assert mismatched.height == 0
+    assert set(traced["run_id"]) == {events[0]["run_id"]}
+    assert set(traced["param_version"]) == {1}

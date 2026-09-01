@@ -26,7 +26,7 @@ CREATE OR REPLACE PACKAGE ut_gold AUTHID DEFINER AS
     --%test(each fact points to the counterparty version valid at its as_of)
     PROCEDURE fact_on_valid_version;
 
-    --%test(per as_of, silver exposures equal fact rows)
+    --%test(per as_of, silver exposures equal exposure fact rows and RWA fact rows)
     PROCEDURE counts_silver_fact_rwa;
 
     --%test(the segment of a fact equals the segment of its counterparty version)

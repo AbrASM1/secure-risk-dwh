@@ -4,35 +4,6 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
     c_feb CONSTANT DATE := DATE '2001-02-28';
     c_mar CONSTANT DATE := DATE '2001-03-31';
 
-    PROCEDURE add_silver(
-        p_as_of IN DATE,
-        p_cpty_id IN VARCHAR2,
-        p_rating IN VARCHAR2 DEFAULT 'BBB',
-        p_name IN VARCHAR2 DEFAULT 'Atlas Foods SA',
-        p_default IN VARCHAR2 DEFAULT 'N'
-    ) IS
-    BEGIN
-        INSERT INTO slv_counterparty (
-            as_of_date, cpty_id, cpty_name, lei, segment_code, country, rating, default_flag, load_id, src_row
-        )
-        VALUES (p_as_of, p_cpty_id, p_name, NULL, 'SME', 'FR', p_rating, p_default, 0, 1);
-    END add_silver;
-
-    PROCEDURE add_exposure(p_as_of IN DATE, p_exposure_id IN VARCHAR2, p_cpty_id IN VARCHAR2) IS
-    BEGIN
-        INSERT INTO slv_exposure (
-            as_of_date, exposure_id, cpty_id, product_code, drawn_amt, undrawn_amt, collateral_amt,
-            collateral_type, currency, load_id, src_row
-        )
-        VALUES (p_as_of, p_exposure_id, p_cpty_id, 'LOAN', 1000, 0, 0, NULL, 'EUR', 0, 1);
-    END add_exposure;
-
-    PROCEDURE build(p_as_of IN DATE) IS
-        l_rows NUMBER;
-    BEGIN
-        pkg_gold.build_as_of(0, p_as_of, l_rows);
-    END build;
-
     PROCEDURE load(p_as_of IN DATE) IS
     BEGIN
         pkg_gold.load_counterparties(NULL, p_as_of);
@@ -49,16 +20,16 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
 
     PROCEDURE history IS
     BEGIN
-        add_silver(c_jan, 'UTG1');
-        add_silver(c_jan, 'UTG2');
-        add_silver(c_jan, 'UTG3', p_default => 'Y');
+        ut_data.add_counterparty(c_jan, 'UTG1');
+        ut_data.add_counterparty(c_jan, 'UTG2');
+        ut_data.add_counterparty(c_jan, 'UTG3', p_default => 'Y');
         load(c_jan);
-        add_silver(c_feb, 'UTG1', p_rating => 'BB');
-        add_silver(c_feb, 'UTG3');
+        ut_data.add_counterparty(c_feb, 'UTG1', p_rating => 'BB');
+        ut_data.add_counterparty(c_feb, 'UTG3');
         load(c_feb);
-        add_silver(c_mar, 'UTG1', p_rating => 'B');
-        add_silver(c_mar, 'UTG2', p_rating => 'A');
-        add_silver(c_mar, 'UTG3');
+        ut_data.add_counterparty(c_mar, 'UTG1', p_rating => 'B');
+        ut_data.add_counterparty(c_mar, 'UTG2', p_rating => 'A');
+        ut_data.add_counterparty(c_mar, 'UTG3');
         load(c_mar);
     END history;
 
@@ -66,9 +37,9 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
         l_closed gld_dim_counterparty%ROWTYPE;
         l_open gld_dim_counterparty%ROWTYPE;
     BEGIN
-        add_silver(c_jan, 'UTG1');
+        ut_data.add_counterparty(c_jan, 'UTG1');
         load(c_jan);
-        add_silver(c_feb, 'UTG1', p_rating => 'BB');
+        ut_data.add_counterparty(c_feb, 'UTG1', p_rating => 'BB');
         load(c_feb);
         SELECT * INTO l_closed
         FROM gld_dim_counterparty
@@ -88,11 +59,11 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
     PROCEDURE scd1_overwrites_all_versions IS
         l_names NUMBER;
     BEGIN
-        add_silver(c_jan, 'UTG1', p_name => 'Old Name SA');
+        ut_data.add_counterparty(c_jan, 'UTG1', p_name => 'Old Name SA');
         load(c_jan);
-        add_silver(c_feb, 'UTG1', p_rating => 'BB', p_name => 'Old Name SA');
+        ut_data.add_counterparty(c_feb, 'UTG1', p_rating => 'BB', p_name => 'Old Name SA');
         load(c_feb);
-        add_silver(c_mar, 'UTG1', p_rating => 'BB', p_name => 'New Name SA');
+        ut_data.add_counterparty(c_mar, 'UTG1', p_rating => 'BB', p_name => 'New Name SA');
         load(c_mar);
         SELECT count(*) INTO l_names
         FROM gld_dim_counterparty
@@ -104,10 +75,10 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
     PROCEDURE missing_counterparty_keeps_version IS
         l_kept gld_dim_counterparty%ROWTYPE;
     BEGIN
-        add_silver(c_jan, 'UTG1');
-        add_silver(c_jan, 'UTG2');
+        ut_data.add_counterparty(c_jan, 'UTG1');
+        ut_data.add_counterparty(c_jan, 'UTG2');
         load(c_jan);
-        add_silver(c_feb, 'UTG1', p_rating => 'BB');
+        ut_data.add_counterparty(c_feb, 'UTG1', p_rating => 'BB');
         load(c_feb);
         SELECT * INTO l_kept
         FROM gld_dim_counterparty
@@ -162,19 +133,19 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
 
     PROCEDURE fact_history IS
     BEGIN
-        add_silver(c_jan, 'UTG1');
-        add_silver(c_jan, 'UTG2');
-        add_exposure(c_jan, 'UTGE1', 'UTG1');
-        add_exposure(c_jan, 'UTGE2', 'UTG2');
-        build(c_jan);
-        add_silver(c_feb, 'UTG1', p_rating => 'BB');
-        add_silver(c_feb, 'UTG2');
-        add_exposure(c_feb, 'UTGE1', 'UTG1');
-        add_exposure(c_feb, 'UTGE2', 'UTG2');
-        build(c_feb);
-        add_silver(c_mar, 'UTG1', p_rating => 'B');
-        add_exposure(c_mar, 'UTGE1', 'UTG1');
-        build(c_mar);
+        ut_data.add_counterparty(c_jan, 'UTG1');
+        ut_data.add_counterparty(c_jan, 'UTG2');
+        ut_data.add_exposure(c_jan, 'UTGE1', 'UTG1');
+        ut_data.add_exposure(c_jan, 'UTGE2', 'UTG2');
+        ut_data.build(c_jan);
+        ut_data.add_counterparty(c_feb, 'UTG1', p_rating => 'BB');
+        ut_data.add_counterparty(c_feb, 'UTG2');
+        ut_data.add_exposure(c_feb, 'UTGE1', 'UTG1');
+        ut_data.add_exposure(c_feb, 'UTGE2', 'UTG2');
+        ut_data.build(c_feb);
+        ut_data.add_counterparty(c_mar, 'UTG1', p_rating => 'B');
+        ut_data.add_exposure(c_mar, 'UTGE1', 'UTG1');
+        ut_data.build(c_mar);
     END fact_history;
 
     PROCEDURE fact_grain_unique IS
@@ -182,7 +153,7 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
         l_keys NUMBER;
     BEGIN
         fact_history;
-        build(c_mar);
+        ut_data.build(c_mar);
         SELECT count(*), count(DISTINCT exposure_id || '|' || as_of_date) INTO l_rows, l_keys
         FROM gld_fact_exposure
         WHERE exposure_id LIKE 'UTGE%';
@@ -216,7 +187,14 @@ CREATE OR REPLACE PACKAGE BODY ut_gold AS
             FROM gld_fact_exposure
             GROUP BY as_of_date
         ) f ON s.as_of_date = f.as_of_date
-        WHERE s.as_of_date IN (c_jan, c_feb, c_mar) AND decode(s.silver_rows, f.fact_rows, 0, 1) = 1;
+        LEFT JOIN (
+            SELECT as_of_date, count(*) AS rwa_rows
+            FROM gld_fact_rwa
+            GROUP BY as_of_date
+        ) r ON s.as_of_date = r.as_of_date
+        WHERE
+            s.as_of_date IN (c_jan, c_feb, c_mar)
+            AND (decode(s.silver_rows, f.fact_rows, 0, 1) = 1 OR decode(s.silver_rows, r.rwa_rows, 0, 1) = 1);
         ut.expect(l_wrong).to_equal(0);
     END counts_silver_fact_rwa;
 

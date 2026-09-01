@@ -96,9 +96,20 @@ CREATE OR REPLACE PACKAGE BODY pkg_gold AS
         INNER JOIN gld_dim_product p ON s.product_code = p.product_code;
     END load_facts;
 
-    FUNCTION checked_facts(p_as_of_date IN DATE) RETURN NUMBER IS
+    PROCEDURE build_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE) IS -- F4
+    BEGIN
+        load_counterparties(p_run_id, p_as_of_date);
+        load_facts(p_run_id, p_as_of_date);
+        EXCEPTION
+            WHEN OTHERS THEN
+                pkg_err.log_error(p_run_id, 'build_as_of');
+                RAISE;
+    END build_as_of;
+
+    PROCEDURE finish_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE, p_rows OUT NUMBER) IS
         l_silver NUMBER;
         l_facts NUMBER;
+        l_rwa NUMBER;
     BEGIN
         SELECT count(*) INTO l_silver
         FROM slv_exposure
@@ -106,27 +117,27 @@ CREATE OR REPLACE PACKAGE BODY pkg_gold AS
         SELECT count(*) INTO l_facts
         FROM gld_fact_exposure
         WHERE as_of_date = p_as_of_date;
-        IF l_silver != l_facts THEN
+        SELECT count(*) INTO l_rwa
+        FROM gld_fact_rwa
+        WHERE as_of_date = p_as_of_date;
+        IF l_facts != l_silver OR l_rwa != l_silver THEN
             raise_application_error(
-                c_counts, to_char(p_as_of_date, 'YYYY-MM-DD') || ': ' || l_silver || ' silver, ' || l_facts || ' facts'
+                c_counts,
+                to_char(p_as_of_date, 'YYYY-MM-DD') || ': ' || l_silver || ' silver, ' || l_facts || ' facts, '
+                || l_rwa || ' rwa'
             );
         END IF;
-        RETURN l_facts;
-    END checked_facts;
-
-    PROCEDURE build_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE, p_rows OUT NUMBER) IS -- F4
-    BEGIN
-        load_counterparties(p_run_id, p_as_of_date);
-        load_facts(p_run_id, p_as_of_date);
-        p_rows := checked_facts(p_as_of_date);
+        p_rows := l_facts;
         EXCEPTION
             WHEN OTHERS THEN
-                pkg_err.log_error(p_run_id, 'build_as_of');
+                pkg_err.log_error(p_run_id, 'finish_as_of');
                 RAISE;
-    END build_as_of;
+    END finish_as_of;
 
     PROCEDURE rewind(p_run_id IN NUMBER, p_from IN DATE) IS -- F4
     BEGIN
+        DELETE FROM gld_fact_rwa
+        WHERE as_of_date >= p_from;
         DELETE FROM gld_fact_exposure
         WHERE as_of_date >= p_from;
         DELETE FROM gld_dim_counterparty

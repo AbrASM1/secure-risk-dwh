@@ -1,0 +1,5 @@
+ALTER SESSION SET CURRENT_SCHEMA = srdwh_owner;
+CREATE OR REPLACE PACKAGE pkg_rwa AUTHID DEFINER AS
+    PROCEDURE compute(p_run_id IN NUMBER, p_as_of_date IN DATE);
+END pkg_rwa;
+/

@@ -5,7 +5,9 @@ CREATE OR REPLACE PACKAGE pkg_gold AUTHID DEFINER AS
 
     PROCEDURE load_counterparties(p_run_id IN NUMBER, p_as_of_date IN DATE);
 
-    PROCEDURE build_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE, p_rows OUT NUMBER);
+    PROCEDURE build_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE);
+
+    PROCEDURE finish_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE, p_rows OUT NUMBER);
 
     PROCEDURE rewind(p_run_id IN NUMBER, p_from IN DATE);
 END pkg_gold;
