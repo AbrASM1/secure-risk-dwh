@@ -18,6 +18,8 @@ CREATE OR REPLACE PACKAGE ut_data AS
         p_undrawn IN NUMBER DEFAULT 0
     );
 
+    PROCEDURE load_golden;
+
     PROCEDURE build(p_as_of IN DATE);
 END ut_data;
 /

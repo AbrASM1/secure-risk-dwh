@@ -4,5 +4,23 @@ CREATE OR REPLACE PACKAGE ut_rwa AS
 
     --%test(each as_of takes the parameter version valid at that date)
     PROCEDURE param_version_selection;
+
+    --%test(golden set G1 to G10: class, EAD, E*, risk weight and RWA exact to the cent)
+    PROCEDURE golden_set_exact;
+
+    --%test(golden set total RWA is 2,211,000.00)
+    PROCEDURE golden_total;
+
+    --%test(a defaulted counterparty takes class DEFAULTED whatever its segment)
+    PROCEDURE defaulted_class;
+
+    --%test(rating CCC falls in bucket CCC_C)
+    PROCEDURE ccc_bucket;
+
+    --%test(RWA rounds half a cent away from zero and intermediates stay unrounded)
+    PROCEDURE rounding_half_cent;
+
+    --%test(each of the 42 class and bucket cells yields the SPEC risk weight)
+    PROCEDURE risk_weight_matrix;
 END ut_rwa;
 /

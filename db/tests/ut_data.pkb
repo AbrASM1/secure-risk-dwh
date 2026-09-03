@@ -31,6 +31,42 @@ CREATE OR REPLACE PACKAGE BODY ut_data AS
         VALUES (p_as_of, p_exposure_id, p_cpty_id, p_product, p_drawn, p_undrawn, 0, NULL, 'EUR', 0, 1);
     END add_exposure;
 
+    PROCEDURE load_golden IS
+    BEGIN
+        INSERT INTO slv_counterparty (
+            as_of_date, cpty_id, cpty_name, lei, segment_code, country, rating, default_flag, load_id, src_row
+        )
+        SELECT
+            as_of_date,
+            golden_id,
+            'Golden ' || golden_id AS cpty_name,
+            NULL AS lei,
+            segment_code,
+            'FR' AS country,
+            rating,
+            default_flag,
+            0 AS load_id,
+            1 AS src_row
+        FROM ut_golden_rwa;
+        INSERT INTO slv_exposure (
+            as_of_date, exposure_id, cpty_id, product_code, drawn_amt, undrawn_amt, collateral_amt,
+            collateral_type, currency, load_id, src_row
+        )
+        SELECT
+            as_of_date,
+            golden_id AS exposure_id,
+            golden_id AS cpty_id,
+            product_code,
+            drawn_amt,
+            undrawn_amt,
+            collateral_amt,
+            collateral_type,
+            'EUR' AS currency,
+            0 AS load_id,
+            1 AS src_row
+        FROM ut_golden_rwa;
+    END load_golden;
+
     PROCEDURE build(p_as_of IN DATE) IS
         l_rows NUMBER;
     BEGIN

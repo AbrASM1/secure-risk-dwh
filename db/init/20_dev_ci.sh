@@ -26,6 +26,7 @@ SQL
 
 echo "20_dev_ci: utPLSQL installed in FREEPDB1 for SRDWH_OWNER, UT3 locked (SRDWH_ENV=${SRDWH_ENV})"
 
+"$(dirname "$0")/10_deploy.sh" /opt/srdwh/tests/fixtures
 "$(dirname "$0")/10_deploy.sh" /opt/srdwh/tests
 sqlplus -s -L / as sysdba <<SQL
 WHENEVER SQLERROR EXIT FAILURE
