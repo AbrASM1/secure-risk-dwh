@@ -11,7 +11,7 @@ from srdwh.log import Event, emit
 OPS = "srdwh_owner.pkg_ops"
 GOLD = "srdwh_owner.pkg_gold"
 RWA = "srdwh_owner.pkg_rwa"
-GOLD_TABLES = ("GLD_DIM_COUNTERPARTY", "GLD_FACT_EXPOSURE", "GLD_FACT_RWA")
+GOLD_TABLES = ("GLD_DIM_COUNTERPARTY", "GLD_FACT_EXPOSURE", "GLD_FACT_RWA", "GLD_MART_RWA")
 SILVER_TABLES = ("SLV_COUNTERPARTY", "SLV_EXPOSURE", "SLV_REJ_COUNTERPARTY", "SLV_REJ_EXPOSURE")
 
 

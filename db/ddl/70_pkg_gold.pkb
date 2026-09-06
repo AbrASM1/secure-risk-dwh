@@ -106,11 +106,31 @@ CREATE OR REPLACE PACKAGE BODY pkg_gold AS
                 RAISE;
     END build_as_of;
 
+    PROCEDURE load_mart(p_as_of_date IN DATE) IS
+    BEGIN
+        DELETE FROM gld_mart_rwa
+        WHERE as_of_date = p_as_of_date;
+        INSERT INTO gld_mart_rwa (as_of_date, segment_code, exposure_class, risk_weight, n_exposures, ead, e_star, rwa)
+        SELECT
+            as_of_date,
+            segment_code,
+            exposure_class,
+            risk_weight,
+            count(*) AS n_exposures,
+            sum(ead) AS ead,
+            sum(e_star) AS e_star,
+            sum(rwa) AS rwa
+        FROM gld_fact_rwa
+        WHERE as_of_date = p_as_of_date
+        GROUP BY as_of_date, segment_code, exposure_class, risk_weight;
+    END load_mart;
+
     PROCEDURE finish_as_of(p_run_id IN NUMBER, p_as_of_date IN DATE, p_rows OUT NUMBER) IS
         l_silver NUMBER;
         l_facts NUMBER;
         l_rwa NUMBER;
     BEGIN
+        load_mart(p_as_of_date);
         SELECT count(*) INTO l_silver
         FROM slv_exposure
         WHERE as_of_date = p_as_of_date;
@@ -136,6 +156,8 @@ CREATE OR REPLACE PACKAGE BODY pkg_gold AS
 
     PROCEDURE rewind(p_run_id IN NUMBER, p_from IN DATE) IS -- F4
     BEGIN
+        DELETE FROM gld_mart_rwa
+        WHERE as_of_date >= p_from;
         DELETE FROM gld_fact_rwa
         WHERE as_of_date >= p_from;
         DELETE FROM gld_fact_exposure

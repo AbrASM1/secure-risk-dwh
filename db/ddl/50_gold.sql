@@ -171,6 +171,28 @@ COMMENT ON COLUMN gld_fact_rwa.rwa IS 'ROUND(e_star x risk_weight, 2).';
 COMMENT ON COLUMN gld_fact_rwa.param_version IS 'Parameter set valid at as_of_date.';
 COMMENT ON COLUMN gld_fact_rwa.run_id IS 'Run that wrote the row.';
 
+CREATE TABLE gld_mart_rwa (
+    as_of_date DATE NOT NULL,
+    segment_code VARCHAR2 (20 CHAR) NOT NULL,
+    exposure_class VARCHAR2 (20 CHAR) NOT NULL,
+    risk_weight NUMBER(6,4) NOT NULL,
+    n_exposures NUMBER(10) NOT NULL,
+    ead NUMBER(30,6) NOT NULL,
+    e_star NUMBER(30,6) NOT NULL,
+    rwa NUMBER(28,2) NOT NULL,
+    CONSTRAINT gld_mart_rwa_pk PRIMARY KEY (as_of_date, segment_code, exposure_class, risk_weight)
+);
+
+COMMENT ON TABLE gld_mart_rwa IS 'RWA aggregated per as_of, segment, exposure class and risk weight (F4).';
+COMMENT ON COLUMN gld_mart_rwa.as_of_date IS 'As-of date.';
+COMMENT ON COLUMN gld_mart_rwa.segment_code IS 'Segment.';
+COMMENT ON COLUMN gld_mart_rwa.exposure_class IS 'Exposure class.';
+COMMENT ON COLUMN gld_mart_rwa.risk_weight IS 'Risk weight.';
+COMMENT ON COLUMN gld_mart_rwa.n_exposures IS 'Number of exposures.';
+COMMENT ON COLUMN gld_mart_rwa.ead IS 'Sum of ead.';
+COMMENT ON COLUMN gld_mart_rwa.e_star IS 'Sum of e_star.';
+COMMENT ON COLUMN gld_mart_rwa.rwa IS 'Sum of rwa.';
+
 INSERT INTO gld_dim_date (date_sk, calendar_date, month_no, quarter_no, year_no, is_month_end)
 SELECT
     to_number(to_char(d.calendar_date, 'YYYYMMDD')) AS date_sk,

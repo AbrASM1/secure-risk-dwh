@@ -263,5 +263,33 @@ CREATE OR REPLACE PACKAGE BODY ut_rwa AS
             ORDER BY exposure_class, rating_bucket;
         ut.expect(l_actual).to_equal(l_expected);
     END risk_weight_matrix;
+
+    PROCEDURE mart_equals_facts IS
+        l_actual SYS_REFCURSOR;
+        l_expected SYS_REFCURSOR;
+    BEGIN
+        golden;
+        OPEN l_actual FOR
+            SELECT
+                as_of_date,
+                sum(n_exposures) AS n_exposures,
+                sum(ead) AS ead,
+                sum(e_star) AS e_star,
+                sum(rwa) AS rwa
+            FROM gld_mart_rwa
+            WHERE as_of_date = c_golden
+            GROUP BY as_of_date;
+        OPEN l_expected FOR
+            SELECT
+                as_of_date,
+                count(*) AS n_exposures,
+                sum(ead) AS ead,
+                sum(e_star) AS e_star,
+                sum(rwa) AS rwa
+            FROM gld_fact_rwa
+            WHERE as_of_date = c_golden
+            GROUP BY as_of_date;
+        ut.expect(l_actual).to_equal(l_expected);
+    END mart_equals_facts;
 END ut_rwa;
 /

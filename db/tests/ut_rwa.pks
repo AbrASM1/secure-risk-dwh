@@ -22,5 +22,8 @@ CREATE OR REPLACE PACKAGE ut_rwa AS
 
     --%test(each of the 42 class and bucket cells yields the SPEC risk weight)
     PROCEDURE risk_weight_matrix;
+
+    --%test(per as_of, mart counts and sums of ead, e_star and rwa equal the RWA facts)
+    PROCEDURE mart_equals_facts;
 END ut_rwa;
 /
