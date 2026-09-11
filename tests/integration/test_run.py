@@ -11,9 +11,9 @@ import polars as pl
 import pytest
 
 from srdwh.config import Profile
-from srdwh.contracts.landing import DATA_FILE, EXPECTED, partition_folder
+from srdwh.contracts.landing import EXPECTED, partition_folder
 from tests.integration.db import rows
-from tests.integration.pipeline import landing, named, retire, rewrite, run
+from tests.integration.pipeline import identities, landing, named, retire, rewrite, run
 
 pytestmark = pytest.mark.db
 SILVER_CHECKSUM = """
@@ -281,12 +281,6 @@ LINEAGE = """
     JOIN srdwh_owner.slv_exposure s ON s.as_of_date = r.as_of_date AND s.exposure_id = r.exposure_id
     JOIN srdwh_owner.ops_load_registry g ON g.load_id = s.load_id
     WHERE r.as_of_date = :as_of"""
-
-
-def identities(data_dir: Path) -> set[str]:
-    frames = pl.concat(pl.read_parquet(path) for path in data_dir.glob(f"landing/counterparty/*/{DATA_FILE}"))
-    values = pl.concat([frames["cpty_name"], frames["lei"]]).drop_nulls()
-    return set(values.filter(values != "").to_list())
 
 
 def oversize(times: int) -> Callable[[pl.DataFrame], pl.DataFrame]:

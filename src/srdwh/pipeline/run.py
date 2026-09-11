@@ -93,7 +93,7 @@ def _phases(connection: oracledb.Connection, run_id: int, options: RunOptions, s
         silver.replace(connection, run_id, item, stream)
     if work:
         gold.gather_stats(connection, run_id, gold.SILVER_TABLES)
-    gold.gold(connection, run_id, options.rebuild_from, stream)
+    gold.gold(connection, run_id, options.rebuild_from, options.data_dir / "exports", stream)
     return EXIT_OK
 
 

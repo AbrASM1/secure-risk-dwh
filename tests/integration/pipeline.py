@@ -14,14 +14,15 @@ import pytest
 from srdwh.cli import main
 from srdwh.config import Profile, load_settings, month_end
 from srdwh.contracts.landing import DATA_FILE, MANIFEST, partition_folder
-from srdwh.generate.landing import parquet, write_landing
+from srdwh.files import parquet
+from srdwh.generate.landing import write_landing
 
 SETTINGS = Path(__file__).resolve().parents[2] / "srdwh.toml"
 REF = SETTINGS.parent / "db" / "ref"
 Events = list[dict[str, object]]
 
 
-_MONTHS = itertools.count(secrets.randbelow(60) * 2)
+_MONTHS = itertools.count(secrets.randbelow(48))
 RETIRE = (
     "UPDATE srdwh_owner.ops_load_registry SET status = 'FAILED', message = 'retired by tests', "
     "ended_at = coalesce(ended_at, systimestamp) WHERE as_of_date = :day AND status IN ('STARTED', 'LOADED')",
@@ -82,3 +83,9 @@ def retire(connection: oracledb.Connection, profile: Profile) -> None:
         for statement in RETIRE:
             cursor.executemany(statement, [{"day": day} for day in profile.as_of_dates])
     connection.commit()
+
+
+def identities(data_dir: Path) -> set[str]:
+    frames = pl.concat(pl.read_parquet(path) for path in data_dir.glob(f"landing/counterparty/*/{DATA_FILE}"))
+    values = pl.concat([frames["cpty_name"], frames["lei"]]).drop_nulls()
+    return set(values.filter(values != "").to_list())

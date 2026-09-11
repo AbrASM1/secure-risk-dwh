@@ -7,7 +7,7 @@ CREATE OR REPLACE PACKAGE BODY ut_ops AS
     PROCEDURE add_load(p_feed IN VARCHAR2, p_sha256 IN VARCHAR2, p_status IN VARCHAR2) IS
     BEGIN
         INSERT INTO ops_load_registry (feed, as_of_date, file_path, sha256, rows_expected, status, started_at)
-        VALUES (p_feed, c_as_of, 'probe', p_sha256, 0, p_status, systimestamp AT TIME ZONE 'UTC');
+        VALUES (p_feed, c_as_of, 'probe', p_sha256, 0, p_status, systimestamp AT TIME ZONE '+00:00');
     END add_load;
 
     PROCEDURE skip_loaded_same_sha256 IS
@@ -30,7 +30,7 @@ CREATE OR REPLACE PACKAGE BODY ut_ops AS
         l_load_id ops_load_registry.load_id%TYPE;
     BEGIN
         INSERT INTO ops_load_registry (feed, as_of_date, file_path, sha256, rows_expected, status, started_at)
-        VALUES (p_feed, p_as_of, 'probe', c_sha, 0, 'LOADED', systimestamp AT TIME ZONE 'UTC')
+        VALUES (p_feed, p_as_of, 'probe', c_sha, 0, 'LOADED', systimestamp AT TIME ZONE '+00:00')
         RETURNING load_id INTO l_load_id;
         RETURN l_load_id;
     END new_load;

@@ -1,10 +1,12 @@
 import time
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import TextIO
 
 import oracledb
 
 from srdwh.db import tag
+from srdwh.export.views import export_as_of
 from srdwh.ingest.registry import call
 from srdwh.log import Event, emit
 
@@ -15,7 +17,9 @@ GOLD_TABLES = ("GLD_DIM_COUNTERPARTY", "GLD_FACT_EXPOSURE", "GLD_FACT_RWA", "GLD
 SILVER_TABLES = ("SLV_COUNTERPARTY", "SLV_EXPOSURE", "SLV_REJ_COUNTERPARTY", "SLV_REJ_EXPOSURE")
 
 
-def gold(connection: oracledb.Connection, run_id: int, rebuild_from: date | None, stream: TextIO) -> None:
+def gold(
+    connection: oracledb.Connection, run_id: int, rebuild_from: date | None, exports: Path, stream: TextIO
+) -> None:
     tag(connection, run_id, "plan")
     start = _date(connection, "gold_start", rebuild_from)
     if start is None:
@@ -25,6 +29,7 @@ def gold(connection: oracledb.Connection, run_id: int, rebuild_from: date | None
         _rewind(connection, run_id, start, stream)
     for as_of in _dates(connection, start):
         _build(connection, run_id, as_of, stream)
+        _export(connection, run_id, as_of, exports, stream)
     gather_stats(connection, run_id, GOLD_TABLES)
 
 
@@ -56,9 +61,17 @@ def _build(connection: oracledb.Connection, run_id: int, as_of: date, stream: Te
         rows = int(built.getvalue())
     call(connection, "log_step", run_id, "gold", as_of, started_at, None, rows, None, "OK", None)
     connection.commit()
+    emit(Event("gold_end", "gold", run_id=run_id, as_of=as_of, rows=rows, duration_ms=_ms(started)), stream)
+
+
+def _export(connection: oracledb.Connection, run_id: int, as_of: date, exports: Path, stream: TextIO) -> None:
+    tag(connection, run_id, "export")
+    started, started_at = time.monotonic(), datetime.now(UTC)
+    rows = export_as_of(connection, as_of, exports)
+    call(connection, "log_step", run_id, "export", as_of, started_at, None, rows, None, "OK", None)
     call(connection, "record_gold", run_id, as_of)
     connection.commit()
-    emit(Event("gold_end", "gold", run_id=run_id, as_of=as_of, rows=rows, duration_ms=_ms(started)), stream)
+    emit(Event("export_end", "export", run_id=run_id, as_of=as_of, rows=rows, duration_ms=_ms(started)), stream)
 
 
 def _date(connection: oracledb.Connection, name: str, *arguments: object) -> date | None:

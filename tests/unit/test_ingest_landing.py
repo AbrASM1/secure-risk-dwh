@@ -9,7 +9,8 @@ import pytest
 
 from srdwh.config import load_settings
 from srdwh.contracts.landing import DATA_FILE, MANIFEST
-from srdwh.generate.landing import parquet, write_landing
+from srdwh.files import parquet
+from srdwh.generate.landing import write_landing
 from srdwh.ingest.landing import StructuralError, partitions, read_delivery
 
 SETTINGS = Path(__file__).resolve().parents[2] / "srdwh.toml"

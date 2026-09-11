@@ -27,7 +27,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
         UPDATE ops_load_registry
         SET
             status = 'FAILED',
-            ended_at = systimestamp AT TIME ZONE 'UTC',
+            ended_at = systimestamp AT TIME ZONE '+00:00',
             message = 'left STARTED by an interrupted run'
         WHERE status = 'STARTED';
         EXCEPTION
@@ -48,7 +48,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
     BEGIN
         INSERT INTO ops_load_registry (feed, as_of_date, file_path, sha256, rows_expected, status, started_at)
         VALUES (
-            p_feed, p_as_of_date, p_file_path, p_sha256, p_rows_expected, 'STARTED', systimestamp AT TIME ZONE 'UTC'
+            p_feed, p_as_of_date, p_file_path, p_sha256, p_rows_expected, 'STARTED', systimestamp AT TIME ZONE '+00:00'
         )
         RETURNING load_id INTO l_load_id;
         RETURN l_load_id;
@@ -88,7 +88,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
                 WHEN l_rows != r.rows_expected
                     THEN 'bronze holds ' || l_rows || ' rows, manifest announces ' || r.rows_expected
             END,
-            r.ended_at = systimestamp AT TIME ZONE 'UTC'
+            r.ended_at = systimestamp AT TIME ZONE '+00:00'
         WHERE r.load_id = p_load_id AND r.status = 'STARTED';
         IF SQL%ROWCOUNT = 0 THEN
             raise_application_error(c_no_started_load, 'load ' || p_load_id || ' is not STARTED');
@@ -102,7 +102,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
     PROCEDURE fail_load(p_run_id IN NUMBER, p_load_id IN NUMBER, p_message IN VARCHAR2) IS
     BEGIN
         UPDATE ops_load_registry
-        SET status = 'FAILED', ended_at = systimestamp AT TIME ZONE 'UTC', message = substr(p_message, 1, 4000)
+        SET status = 'FAILED', ended_at = systimestamp AT TIME ZONE '+00:00', message = substr(p_message, 1, 4000)
         WHERE load_id = p_load_id AND status = 'STARTED';
         IF SQL%ROWCOUNT = 0 THEN
             raise_application_error(c_no_started_load, 'load ' || p_load_id || ' is not STARTED');
@@ -152,9 +152,9 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
         WHEN MATCHED THEN UPDATE SET
             s.slv_cpty_load_id = p_cpty_load_id,
             s.slv_expo_load_id = p_expo_load_id,
-            s.slv_at = systimestamp AT TIME ZONE 'UTC'
+            s.slv_at = systimestamp AT TIME ZONE '+00:00'
         WHEN NOT MATCHED THEN INSERT (as_of_date, slv_cpty_load_id, slv_expo_load_id, slv_at)
-            VALUES (d.as_of_date, p_cpty_load_id, p_expo_load_id, systimestamp AT TIME ZONE 'UTC');
+            VALUES (d.as_of_date, p_cpty_load_id, p_expo_load_id, systimestamp AT TIME ZONE '+00:00');
     EXCEPTION
         WHEN OTHERS THEN
             pkg_err.log_error(p_run_id, 'record_silver');
@@ -214,7 +214,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
         SET
             gld_cpty_load_id = slv_cpty_load_id,
             gld_expo_load_id = slv_expo_load_id,
-            gld_at = systimestamp AT TIME ZONE 'UTC'
+            gld_at = systimestamp AT TIME ZONE '+00:00'
         WHERE as_of_date = p_as_of_date;
     EXCEPTION
         WHEN OTHERS THEN
@@ -250,7 +250,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
             run_id, step, as_of_date, started_at, ended_at, rows_in, rows_out, rows_rejected, status, message
         )
         VALUES (
-            p_run_id, p_step, p_as_of_date, p_started_at, systimestamp AT TIME ZONE 'UTC',
+            p_run_id, p_step, p_as_of_date, p_started_at, systimestamp AT TIME ZONE '+00:00',
             p_rows_in, p_rows_out, p_rows_rejected, p_status, substr(p_message, 1, 4000)
         );
         EXCEPTION

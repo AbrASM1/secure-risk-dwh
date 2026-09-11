@@ -6,3 +6,6 @@ GRANT EXECUTE ON pkg_ops TO srdwh_etl;
 GRANT EXECUTE ON pkg_silver TO srdwh_etl;
 GRANT EXECUTE ON pkg_gold TO srdwh_etl;
 GRANT EXECUTE ON pkg_rwa TO srdwh_etl;
+GRANT SELECT ON v_rwa_by_class TO srdwh_etl;
+GRANT SELECT ON v_rwa_trend TO srdwh_etl;
+GRANT SELECT ON v_top_exposures TO srdwh_etl;
