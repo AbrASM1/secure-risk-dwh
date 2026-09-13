@@ -6,6 +6,28 @@ if [[ ! "${SRDWH_ENV:?20_dev_ci: SRDWH_ENV is required}" =~ ^(dev|ci)$ ]]; then
   exit 0
 fi
 
+sqlplus -s -L / as sysdba <<SQL
+WHENEVER SQLERROR EXIT FAILURE
+WHENEVER OSERROR EXIT FAILURE
+SET FEEDBACK OFF
+ALTER SESSION SET CONTAINER = FREEPDB1;
+INSERT INTO srdwh_sec.sec_user_access (username, profile, segment_code)
+SELECT a.username, a.profile, a.segment_code
+FROM (
+  VALUES
+  ('ANALYST_CORP', 'ANALYST', 'CORPORATE'),
+  ('ANALYST_RETAIL', 'ANALYST', 'RETAIL'),
+  ('RISK_MANAGER', 'RISK_MANAGER', NULL),
+  ('AUDITOR', 'AUDITOR', NULL)
+) a (username, profile, segment_code);
+COMMIT;
+GRANT r_analyst TO analyst_corp, analyst_retail, probe_noprofile;
+GRANT r_risk_manager TO risk_manager;
+GRANT r_auditor TO auditor;
+EXIT
+SQL
+echo "20_dev_ci: profiles assigned from SEC_USER_ACCESS, PROBE_NOPROFILE without a row"
+
 ut3_password="U$(head -c 96 /dev/urandom | base64 -w0 | tr -dc 'A-Za-z0-9' | cut -c1-23)"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT

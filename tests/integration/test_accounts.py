@@ -9,6 +9,13 @@ pytestmark = pytest.mark.db
 APPLICATION = ("SRDWH_OWNER", "SRDWH_SEC", "SRDWH_ETL")
 PROFILES = ("ANALYST_CORP", "ANALYST_RETAIL", "RISK_MANAGER", "AUDITOR", "PROBE_NOPROFILE")
 LOGINS = ("SRDWH_OWNER", "SRDWH_ETL", *PROFILES)
+PROFILE_ROLES = {
+    ("ANALYST_CORP", "R_ANALYST"),
+    ("ANALYST_RETAIL", "R_ANALYST"),
+    ("PROBE_NOPROFILE", "R_ANALYST"),
+    ("RISK_MANAGER", "R_RISK_MANAGER"),
+    ("AUDITOR", "R_AUDITOR"),
+}
 
 
 def accounts() -> tuple[str, ...]:
@@ -43,12 +50,12 @@ def test_owner_privileges_and_quotas(system_connection: oracledb.Connection) -> 
 def test_no_forbidden_privilege(system_connection: oracledb.Connection) -> None:
     ours = set(accounts())
     system = rows(system_connection, "SELECT grantee, privilege FROM dba_sys_privs")
-    assert {privilege for grantee, privilege in system if grantee in ours} == {"CREATE SESSION"}
-    assert [
-        grant
-        for grant in rows(system_connection, "SELECT grantee, granted_role FROM dba_role_privs")
-        if grant[0] in ours
-    ] == []
+    assert {(grantee, privilege) for grantee, privilege in system if grantee in ours} == {
+        *((login, "CREATE SESSION") for login in ours - {"SRDWH_SEC"}),
+        ("SRDWH_SEC", "ADMINISTER DATABASE TRIGGER"),
+    }
+    granted = rows(system_connection, "SELECT grantee, granted_role FROM dba_role_privs")
+    assert {grant for grant in granted if grant[0] in ours} == {grant for grant in PROFILE_ROLES if grant[0] in ours}
     executable = rows(
         system_connection,
         "SELECT grantee FROM dba_tab_privs "

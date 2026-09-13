@@ -26,4 +26,4 @@ capitalisation_policy = upper
 extended_capitalisation_policy = upper
 
 [sqlfluff:rules:references.keywords]
-ignore_words = feed
+ignore_words = feed,profile
