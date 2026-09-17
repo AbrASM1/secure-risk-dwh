@@ -25,8 +25,15 @@ def connect() -> Connect:
     return open_as
 
 
+@pytest.fixture(scope="session")
+def owner_connection(connect: Connect) -> Iterator[oracledb.Connection]:
+    connection = connect("SRDWH_OWNER")
+    yield connection
+    connection.close()
+
+
 @pytest.fixture
-def pipeline_profile(system_connection: oracledb.Connection) -> Iterator[Callable[[int], Profile]]:
+def pipeline_profile(owner_connection: oracledb.Connection) -> Iterator[Callable[[int], Profile]]:
     allocated: list[Profile] = []
 
     def allocate(as_of_count: int = 1) -> Profile:
@@ -35,4 +42,4 @@ def pipeline_profile(system_connection: oracledb.Connection) -> Iterator[Callabl
 
     yield allocate
     for profile in allocated:
-        retire(system_connection, profile)
+        retire(owner_connection, profile)

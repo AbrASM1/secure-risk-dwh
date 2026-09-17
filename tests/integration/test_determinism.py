@@ -24,7 +24,7 @@ def test_gold_totals_identical(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(2)
@@ -32,8 +32,8 @@ def test_gold_totals_identical(
     first, second = landing(tmp_path / "first", profile), landing(tmp_path / "second", profile)
     assert digests(first) == digests(second)
     assert run(first, capsys, monkeypatch)[0] == 0
-    totals = rows(system_connection, TOTALS, **window)
-    retire(system_connection, profile)
+    totals = rows(owner_connection, TOTALS, **window)
+    retire(owner_connection, profile)
     assert run(second, capsys, monkeypatch)[0] == 0
     assert len(totals) == 2
-    assert rows(system_connection, TOTALS, **window) == totals
+    assert rows(owner_connection, TOTALS, **window) == totals

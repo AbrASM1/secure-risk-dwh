@@ -28,7 +28,7 @@ def test_parquet_decimal(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(2)
@@ -40,7 +40,7 @@ def test_parquet_decimal(
         by_class, trend, top = frames["v_rwa_by_class"], frames["v_rwa_trend"], frames["v_top_exposures"]
         assert (by_class.schema["rwea"], by_class.schema["exposure_value"]) == (pl.Decimal(28, 2), pl.Decimal(30, 6))
         assert (trend.schema["rwa_density"], top.schema["rwa"]) == (pl.Decimal(30, 6), pl.Decimal(20, 2))
-        assert by_class["rwea"].sum() == Decimal(str(rows(system_connection, FACT_RWA, as_of=as_of)[0][0]))
+        assert by_class["rwea"].sum() == Decimal(str(rows(owner_connection, FACT_RWA, as_of=as_of)[0][0]))
         assert top.height == 20
 
 
@@ -48,7 +48,7 @@ def test_atomic_rewrite(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(1)
@@ -65,11 +65,11 @@ def test_atomic_rewrite(
     assert code == 1
     assert named(events, "export_end") == []
     assert exported(tmp_path) == before
-    assert rows(system_connection, GOLD_RECORDED, as_of=as_of) == [(None,)]
+    assert rows(owner_connection, GOLD_RECORDED, as_of=as_of) == [(None,)]
     code, events = run(tmp_path, capsys, monkeypatch)
     assert code == 0
     assert [event["as_of"] for event in named(events, "export_end")] == [as_of.isoformat()]
-    assert rows(system_connection, GOLD_RECORDED, as_of=as_of) != [(None,)]
+    assert rows(owner_connection, GOLD_RECORDED, as_of=as_of) != [(None,)]
     assert {path.name for path in exported(tmp_path)} == {path.name for path in before}
 
 

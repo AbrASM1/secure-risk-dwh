@@ -53,7 +53,7 @@ def test_silver_built_then_rerun_replaces_nothing(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(1)
@@ -64,7 +64,7 @@ def test_silver_built_then_rerun_replaces_nothing(
         (e["as_of"], e["rows"]) for e in named(events, "silver_end") if e["as_of"] == profile.first_as_of.isoformat()
     ]
     state = rows(
-        system_connection,
+        owner_connection,
         "SELECT slv_cpty_load_id, slv_expo_load_id FROM srdwh_owner.ops_asof_state WHERE as_of_date = :day",
         day=profile.first_as_of,
     )
@@ -79,12 +79,12 @@ def test_dq_breach_exit_2(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(1)
     assert run(landing(tmp_path, profile), capsys, monkeypatch)[0] == 0
-    silver, state = rows(system_connection, SILVER_CHECKSUM), rows(system_connection, STATE)
+    silver, state = rows(owner_connection, SILVER_CHECKSUM), rows(owner_connection, STATE)
     original = pl.read_parquet(
         tmp_path / "landing" / partition_folder("exposure", profile.first_as_of) / "part-0.parquet"
     )
@@ -96,10 +96,10 @@ def test_dq_breach_exit_2(
     assert float(str(breach["reject_rate"])) > 0.05
     assert named(events, "silver_end") == []
     assert (events[-1]["event"], events[-1]["exit_code"]) == ("run_end", 2)
-    assert rows(system_connection, SILVER_CHECKSUM) == silver
-    assert rows(system_connection, STATE) == state
+    assert rows(owner_connection, SILVER_CHECKSUM) == silver
+    assert rows(owner_connection, STATE) == state
     kept = rows(
-        system_connection,
+        owner_connection,
         "SELECT r.rows_rejected, (SELECT count(*) FROM srdwh_owner.slv_rej_exposure j WHERE j.load_id = r.load_id) "
         "FROM srdwh_owner.ops_load_registry r WHERE r.load_id = :load_id",
         load_id=breach["load_id"],
@@ -137,24 +137,24 @@ def test_rerun_noop(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(3)
     code, events = run(landing(tmp_path, profile), capsys, monkeypatch)
     assert code == 0
     assert [e["as_of"] for e in named(events, "gold_end")] == [d.isoformat() for d in profile.as_of_dates]
-    gold = rows(system_connection, GOLD_CHECKSUM, **window(profile))
+    gold = rows(owner_connection, GOLD_CHECKSUM, **window(profile))
     assert len(gold) == 3
     code, events = run(tmp_path, capsys, monkeypatch)
     assert code == 0
     assert (len(named(events, "load_skipped")), named(events, "silver_end"), named(events, "gold_end")) == (6, [], [])
-    assert rows(system_connection, GOLD_CHECKSUM, **window(profile)) == gold
+    assert rows(owner_connection, GOLD_CHECKSUM, **window(profile)) == gold
 
 
 def test_interrupted_run_resumes(
     tmp_path: Path,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(3)
@@ -169,7 +169,7 @@ def test_interrupted_run_resumes(
     process.wait(timeout=60)
     rerun = subprocess.run(command, capture_output=True, text=True, timeout=300, check=False)
     assert rerun.returncode == 0, rerun.stdout
-    state = rows(system_connection, GOLD_STATE, **window(profile))
+    state = rows(owner_connection, GOLD_STATE, **window(profile))
     assert state == [
         (day.isoformat(), 0, 0, silver, silver)
         for day, (_, _, _, silver, _) in zip(profile.as_of_dates, state, strict=True)
@@ -215,7 +215,7 @@ def test_ground_truth_rejects(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(3)
@@ -225,10 +225,10 @@ def test_ground_truth_rejects(
         feed, as_of = str(event["feed"]), profile.first_as_of.fromisoformat(str(event["as_of"]))
         expected = pl.read_parquet(tmp_path / "ground_truth" / partition_folder(feed, as_of) / EXPECTED)
         stored = sorted(
-            (int(str(r)), str(c)) for r, c in rows(system_connection, REJECTS[feed], load_id=event["load_id"])
+            (int(str(r)), str(c)) for r, c in rows(owner_connection, REJECTS[feed], load_id=event["load_id"])
         )
         assert stored == sorted(expected.rows()), (feed, as_of)
-        assert rows(system_connection, LEAKED[feed], load_id=event["load_id"]) == [(0,)]
+        assert rows(owner_connection, LEAKED[feed], load_id=event["load_id"]) == [(0,)]
     assert len(named(events, "gold_end")) == 3
 
 
@@ -236,25 +236,25 @@ def test_rebuild_from_equals_full_run(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(3)
     assert run(landing(tmp_path, profile), capsys, monkeypatch)[0] == 0
-    full = checksums(system_connection, profile)
+    full = checksums(owner_connection, profile)
     code, events = run(tmp_path, capsys, monkeypatch, "--rebuild-from", profile.first_as_of.isoformat())
     assert code == 0
     days = [d.isoformat() for d in profile.as_of_dates]
     assert [e["as_of"] for e in named(events, "silver_end") if e["as_of"] in days] == days
     assert [e["as_of"] for e in named(events, "gold_end") if e["as_of"] in days] == days
-    assert checksums(system_connection, profile) == full
+    assert checksums(owner_connection, profile) == full
 
 
 def test_late_correction_equals_full_run(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(3)
@@ -263,12 +263,12 @@ def test_late_correction_equals_full_run(
     code, events = run(tmp_path, capsys, monkeypatch)
     assert code == 0
     assert [e["as_of"] for e in named(events, "rewind_end")] == [profile.first_as_of.isoformat()]
-    corrected = checksums(system_connection, profile)
-    retire(system_connection, profile)
+    corrected = checksums(owner_connection, profile)
+    retire(owner_connection, profile)
     code, events = run(tmp_path, capsys, monkeypatch)
     assert code == 0
     assert len(named(events, "load_end")) == 6
-    assert checksums(system_connection, profile) == corrected
+    assert checksums(owner_connection, profile) == corrected
 
 
 MESSAGES = """
@@ -299,7 +299,7 @@ def test_errors_without_names(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(2)
@@ -311,7 +311,7 @@ def test_errors_without_names(
     assert (rejected_code, failed_code) == (2, 1)
     (failure,) = named(failed, "structural_check_failed")
     assert "column=cpty_name check=max_bytes rows=1 first_src_row=1" in str(failure["message"])
-    stored = [rows(system_connection, MESSAGES, run_id=events[0]["run_id"]) for events in (rejected, failed)]
+    stored = [rows(owner_connection, MESSAGES, run_id=events[0]["run_id"]) for events in (rejected, failed)]
     text = json.dumps([rejected, failed, stored], default=str)
     assert len(hidden) > 100
     assert [value for value in hidden if value in text] == []
@@ -321,14 +321,14 @@ def test_lineage_fact_to_file_row(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    system_connection: oracledb.Connection,
+    owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(1)
     code, events = run(landing(tmp_path, profile), capsys, monkeypatch)
     assert code == 0
     schema = ["exposure_id", "cpty_id", "src_row", "file_path", "run_id", "param_version"]
-    traced = pl.DataFrame(rows(system_connection, LINEAGE, as_of=profile.first_as_of), schema=schema, orient="row")
+    traced = pl.DataFrame(rows(owner_connection, LINEAGE, as_of=profile.first_as_of), schema=schema, orient="row")
     (file_path,) = traced["file_path"].unique().to_list()
     delivered = pl.read_parquet(tmp_path / "landing" / file_path).with_row_index("src_row", offset=1)
     joined = traced.join(delivered.cast({"src_row": pl.Int64}), on="src_row", suffix="_file")

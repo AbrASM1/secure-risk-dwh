@@ -49,6 +49,8 @@ COMMENT ON COLUMN sec_user_access.segment_code IS 'Segment of an analyst, empty 
 
 CREATE OR REPLACE PACKAGE pkg_sec_ctx AUTHID DEFINER AS
     procedure SET_PROFILE;
+
+    FUNCTION predicate(p_session_user IN VARCHAR2, p_profile IN VARCHAR2, p_object IN VARCHAR2) RETURN VARCHAR2;
 END pkg_sec_ctx;
 /
 
@@ -68,7 +70,25 @@ CREATE OR REPLACE PACKAGE BODY pkg_sec_ctx AS
             dbms_session.set_context('SRDWH_CTX', 'SEGMENT', l_segment);
         END IF;
     END set_profile;
+
+    FUNCTION predicate(p_session_user IN VARCHAR2, p_profile IN VARCHAR2, p_object IN VARCHAR2) RETURN VARCHAR2 IS -- F7
+    BEGIN
+        RETURN CASE
+            WHEN p_session_user IN ('SRDWH_OWNER', 'SRDWH_ETL') THEN NULL
+            WHEN p_profile = 'RISK_MANAGER' THEN NULL
+            WHEN p_profile = 'AUDITOR' AND p_object = 'GLD_MART_RWA' THEN NULL
+            WHEN p_profile = 'ANALYST' THEN 'segment_code = sys_context(''SRDWH_CTX'', ''SEGMENT'')'
+            ELSE '1=0'
+        END;
+    END predicate;
 END pkg_sec_ctx;
+/
+
+CREATE OR REPLACE FUNCTION sec_vpd_predicate(p_schema IN VARCHAR2, p_object IN VARCHAR2)
+RETURN VARCHAR2 AUTHID DEFINER IS
+BEGIN
+    RETURN pkg_sec_ctx.predicate(sys_context('USERENV', 'SESSION_USER'), sys_context('SRDWH_CTX', 'PROFILE'), p_object);
+END sec_vpd_predicate;
 /
 
 CREATE CONTEXT srdwh_ctx USING srdwh_sec.pkg_sec_ctx;
@@ -84,5 +104,25 @@ EXCEPTION
             WHEN OTHERS THEN
                 NULL;
         END;
+END;
+/
+
+DECLARE
+    PROCEDURE protect(p_table IN VARCHAR2) IS
+    BEGIN
+        dbms_rls.add_policy(
+            object_schema => 'SRDWH_OWNER',
+            object_name => p_table,
+            policy_name => 'VPD_SEGMENT',
+            function_schema => 'SRDWH_SEC',
+            policy_function => 'SEC_VPD_PREDICATE',
+            policy_type => dbms_rls.context_sensitive
+        );
+    END protect;
+BEGIN
+    protect('GLD_FACT_EXPOSURE');
+    protect('GLD_FACT_RWA');
+    protect('GLD_DIM_COUNTERPARTY');
+    protect('GLD_MART_RWA');
 END;
 /

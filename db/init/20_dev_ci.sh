@@ -24,6 +24,7 @@ COMMIT;
 GRANT r_analyst TO analyst_corp, analyst_retail, probe_noprofile;
 GRANT r_risk_manager TO risk_manager;
 GRANT r_auditor TO auditor;
+GRANT EXECUTE ON srdwh_sec.pkg_sec_ctx TO srdwh_owner;
 EXIT
 SQL
 echo "20_dev_ci: profiles assigned from SEC_USER_ACCESS, PROBE_NOPROFILE without a row"

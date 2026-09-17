@@ -14,14 +14,14 @@ COMPARED = """
     ORDER BY g.golden_id"""
 
 
-def test_golden_set_exact_in_python(system_connection: oracledb.Connection) -> None:
+def test_golden_set_exact_in_python(owner_connection: oracledb.Connection) -> None:
     try:
-        with system_connection.cursor() as cursor:
+        with owner_connection.cursor() as cursor:
             cursor.callproc("srdwh_owner.ut_data.load_golden")
             cursor.callproc("srdwh_owner.ut_data.build", [GOLDEN_AS_OF])
-        frame = pl.DataFrame(system_connection.fetch_df_all(COMPARED, fetch_decimals=True))
+        frame = pl.DataFrame(owner_connection.fetch_df_all(COMPARED, fetch_decimals=True))
     finally:
-        system_connection.rollback()
+        owner_connection.rollback()
     assert frame.height == 10
     assert frame.schema["RWA"] == pl.Decimal(20, 2)
     assert frame["RWA"].to_list() == frame["EXPECTED_RWA"].to_list()
