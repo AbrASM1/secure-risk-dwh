@@ -126,3 +126,30 @@ BEGIN
     protect('GLD_MART_RWA');
 END;
 /
+
+BEGIN
+    dbms_redact.add_policy(
+        object_schema => 'SRDWH_OWNER',
+        object_name => 'GLD_DIM_COUNTERPARTY',
+        policy_name => 'RED_COUNTERPARTY',
+        column_name => 'CPTY_NAME',
+        function_type => dbms_redact.full,
+        expression => 'SYS_CONTEXT(''USERENV'', ''SESSION_USER'') NOT IN (''SRDWH_OWNER'', ''SRDWH_ETL'') '
+        || 'AND SYS_CONTEXT(''SYS_SESSION_ROLES'', ''R_RISK_MANAGER'') = ''FALSE'''
+    );
+    dbms_redact.alter_policy(
+        object_schema => 'SRDWH_OWNER',
+        object_name => 'GLD_DIM_COUNTERPARTY',
+        policy_name => 'RED_COUNTERPARTY',
+        action => dbms_redact.add_column,
+        column_name => 'LEI',
+        function_type => dbms_redact.partial,
+        function_parameters => 'VVVVVVVVVVVVVVVVVVVV,VVVVVVVVVVVVVVVVVVVV,*,1,16'
+    );
+END;
+/
+
+BEGIN
+    dbms_utility.compile_schema(schema => 'SRDWH_OWNER', compile_all => FALSE);
+END;
+/
