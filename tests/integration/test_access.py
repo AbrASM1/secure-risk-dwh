@@ -1,3 +1,5 @@
+import secrets
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -88,3 +90,53 @@ def test_names_redacted_for_analyst(connect: Connect, owner_connection: oracledb
     assert {name for _, name, _ in seen} == {" "}
     assert all(lei == "*" * 16 + str(clear[sk][1])[-4:] for sk, _, lei in seen)
     assert {sk: (name, lei) for sk, name, lei in managed} == {sk: clear[sk] for sk, _, _ in managed}
+
+
+TRAIL = """
+    SELECT dbusername, fga_policy_name FROM unified_audit_trail
+    WHERE client_identifier = :marker AND fga_policy_name IS NOT NULL ORDER BY fga_policy_name"""
+PIPELINE_TRAIL = """
+    SELECT count(*) FROM unified_audit_trail
+    WHERE fga_policy_name IN ('FGA_FACT_EXPOSURE', 'FGA_DIM_COUNTERPARTY')
+        AND dbusername IN ('SRDWH_OWNER', 'SRDWH_ETL')"""
+
+
+def read_marked(connect: Connect, account: str, sql: str) -> str:
+    marker = f"fga-{secrets.token_hex(8)}"
+    with connect(account) as connection:
+        connection.client_identifier = marker
+        rows(connection, sql)
+    return marker
+
+
+def audited(connect: Connect, marker: str) -> list[tuple[object, ...]]:
+    deadline = time.monotonic() + 30
+    with connect("AUDITOR") as connection:
+        found = rows(connection, TRAIL, marker=marker)
+        while not found and time.monotonic() < deadline:
+            time.sleep(1)
+            found = rows(connection, TRAIL, marker=marker)
+    return found
+
+
+@pytest.mark.usefixtures("gold_loaded")
+def test_fga_visible_to_auditor_30s(connect: Connect) -> None:
+    marker = read_marked(connect, "ANALYST_CORP", "SELECT sum(drawn_amt) FROM srdwh_owner.gld_fact_exposure")
+    assert audited(connect, marker) == [("ANALYST_CORP", "FGA_FACT_EXPOSURE")]
+
+
+@pytest.mark.usefixtures("gold_loaded")
+def test_fga_traces_filter_on_redacted(connect: Connect) -> None:
+    sql = "SELECT count(*) FROM srdwh_owner.gld_dim_counterparty WHERE cpty_name LIKE 'A%'"
+    marker = read_marked(connect, "ANALYST_CORP", sql)
+    assert audited(connect, marker) == [("ANALYST_CORP", "FGA_DIM_COUNTERPARTY")]
+
+
+@pytest.mark.usefixtures("gold_loaded")
+def test_pipeline_leaves_no_fga(connect: Connect, owner_connection: oracledb.Connection) -> None:
+    rows(owner_connection, "SELECT sum(drawn_amt) FROM srdwh_owner.gld_fact_exposure")
+    rows(owner_connection, "SELECT max(cpty_name), max(lei) FROM srdwh_owner.gld_dim_counterparty")
+    marker = read_marked(connect, "RISK_MANAGER", "SELECT max(lei) FROM srdwh_owner.gld_dim_counterparty")
+    assert audited(connect, marker) == [("RISK_MANAGER", "FGA_DIM_COUNTERPARTY")]
+    with connect("AUDITOR") as connection:
+        assert rows(connection, PIPELINE_TRAIL) == [(0,)]

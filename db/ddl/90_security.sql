@@ -149,6 +149,26 @@ BEGIN
 END;
 /
 
+DECLARE
+    c_outside_pipeline CONSTANT VARCHAR2(100) := 'SYS_CONTEXT(''USERENV'', ''SESSION_USER'') NOT IN (''SRDWH_OWNER'', ''SRDWH_ETL'')';
+
+    PROCEDURE audit_reads(p_table IN VARCHAR2, p_policy IN VARCHAR2, p_columns IN VARCHAR2) IS
+    BEGIN
+        dbms_fga.add_policy(
+            object_schema => 'SRDWH_OWNER',
+            object_name => p_table,
+            policy_name => p_policy,
+            audit_condition => c_outside_pipeline,
+            audit_column => p_columns,
+            statement_types => 'SELECT'
+        );
+    END audit_reads;
+BEGIN
+    audit_reads('GLD_FACT_EXPOSURE', 'FGA_FACT_EXPOSURE', 'DRAWN_AMT,UNDRAWN_AMT');
+    audit_reads('GLD_DIM_COUNTERPARTY', 'FGA_DIM_COUNTERPARTY', 'CPTY_NAME,LEI');
+END;
+/
+
 BEGIN
     dbms_utility.compile_schema(schema => 'SRDWH_OWNER', compile_all => FALSE);
 END;
