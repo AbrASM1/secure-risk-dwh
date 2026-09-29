@@ -72,11 +72,6 @@ def test_login_with_environment_password(connect: Connect, account: str) -> None
         assert rows(connection, "SELECT USER FROM dual") == [(account,)]
 
 
-def test_schema_only_account_cannot_log_in() -> None:
-    with pytest.raises(oracledb.DatabaseError, match="ORA-01017"):
-        oracledb.connect(user="srdwh_sec", password=os.environ["SRDWH_ETL_PASSWORD"], dsn=os.environ["SRDWH_DSN"])
-
-
 def test_owner_reaches_utplsql_through_private_synonyms(
     connect: Connect, system_connection: oracledb.Connection
 ) -> None:

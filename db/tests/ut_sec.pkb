@@ -20,5 +20,15 @@ CREATE OR REPLACE PACKAGE BODY ut_sec AS
         ut.expect(predicate('PROBE_NOPROFILE', NULL, 'GLD_MART_RWA')).to_equal('1=0');
         ut.expect(predicate(NULL, 'UNKNOWN', 'GLD_FACT_RWA')).to_equal('1=0');
     END vpd_predicate_branches;
+
+    PROCEDURE logon_context_failure_denies IS
+        l_profile VARCHAR2(30);
+    BEGIN
+        srdwh_sec.pkg_sec_ctx.set_profile;
+        l_profile := sys_context('SRDWH_CTX', 'PROFILE');
+        ut.expect(l_profile).to_be_null();
+        ut.expect(predicate('ANALYST_CORP', l_profile, 'GLD_FACT_EXPOSURE')).to_equal('1=0');
+        ut.expect(predicate('ANALYST_CORP', l_profile, 'GLD_MART_RWA')).to_equal('1=0');
+    END logon_context_failure_denies;
 END ut_sec;
 /

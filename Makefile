@@ -10,7 +10,7 @@ RELEASES := https://github.com/utPLSQL
 BRONZE_SCOPE := db/ddl db/init src
 BRONZE_MUTATION := \b(update|delete|merge|truncate)\s+(/\*.*?\*/\s*)?((from|into|table)\s+)?("?\w+"?\.)?"?brz_|\balter\s+table\s+("?\w+"?\.)?"?brz_\w*"?\s+truncate\b|\bgrant\s[^;]*?\b(update|delete|all)\b[^;]*?\bon\s+("?\w+"?\.)?"?brz_
 
-.PHONY: setup up down reset lint bronze-check test
+.PHONY: setup up down reset lint bronze-check test access-check
 
 setup: $(CACHE)/utplsql/source/install_headless.sql $(CACHE)/utPLSQL-cli/bin/utplsql
 	uv sync --locked
@@ -52,3 +52,6 @@ test:
 	uv run pytest -m "not perf"
 	@JAVA_OPTS=--enable-native-access=ALL-UNNAMED $(CACHE)/utPLSQL-cli/bin/utplsql run \
 		"SRDWH_OWNER/$${SRDWH_OWNER_PASSWORD}@$${SRDWH_DSN}" -f=ut_documentation_reporter -c --failure-exit-code=1
+
+access-check:
+	uv run srdwh access-check

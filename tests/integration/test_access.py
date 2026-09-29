@@ -1,3 +1,4 @@
+import os
 import secrets
 import time
 from collections.abc import Callable
@@ -6,6 +7,8 @@ from pathlib import Path
 import oracledb
 import pytest
 
+from srdwh.access.matrix import EXPECTED
+from srdwh.cli import main
 from srdwh.config import Profile
 from tests.integration.db import Connect, rows
 from tests.integration.pipeline import landing, run
@@ -31,7 +34,7 @@ def test_logon_sets_profile_context(connect: Connect, account: str) -> None:
         assert [role for (role,) in rows(connection, ROLES)] == roles
 
 
-def test_context_set_only_by_its_package(connect: Connect) -> None:
+def test_context_not_settable(connect: Connect) -> None:
     with connect("ANALYST_CORP") as connection, connection.cursor() as cursor:
         with pytest.raises(oracledb.DatabaseError, match="ORA-01031"):
             cursor.callproc("dbms_session.set_context", ["SRDWH_CTX", "SEGMENT", "RETAIL"])
@@ -140,3 +143,38 @@ def test_pipeline_leaves_no_fga(connect: Connect, owner_connection: oracledb.Con
     assert audited(connect, marker) == [("RISK_MANAGER", "FGA_DIM_COUNTERPARTY")]
     with connect("AUDITOR") as connection:
         assert rows(connection, PIPELINE_TRAIL) == [(0,)]
+
+
+def test_sec_schema_no_login() -> None:
+    with pytest.raises(oracledb.DatabaseError, match="ORA-01017"):
+        oracledb.connect(user="srdwh_sec", password=os.environ["SRDWH_ETL_PASSWORD"], dsn=os.environ["SRDWH_DSN"])
+
+
+def access_check(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> tuple[int, str]:
+    capsys.readouterr()
+    monkeypatch.setattr("sys.argv", ["srdwh", "access-check"])
+    with pytest.raises(SystemExit) as raised:
+        main()
+    return int(str(raised.value.code)), capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("gold_loaded")
+def test_access_check_exit_0(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    code, out = access_check(capsys, monkeypatch)
+    assert (code, "KO" in out) == (0, False), out
+    assert [line.split()[0] for line in out.splitlines()[1:]] == [e.account for e in EXPECTED]
+
+
+@pytest.mark.usefixtures("gold_loaded")
+def test_access_check_detects_extra_grant(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, system_connection: oracledb.Connection
+) -> None:
+    with system_connection.cursor() as cursor:
+        cursor.execute("GRANT SELECT ON srdwh_owner.ref_segment TO r_analyst")
+    try:
+        code, out = access_check(capsys, monkeypatch)
+    finally:
+        with system_connection.cursor() as cursor:
+            cursor.execute("REVOKE SELECT ON srdwh_owner.ref_segment FROM r_analyst")
+    assert code == 1
+    assert "ANALYST_CORP hidden: expected denied, observed REF_SEGMENT" in out

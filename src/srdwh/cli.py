@@ -1,10 +1,13 @@
+import sys
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
+import oracledb
 import typer
 
+from srdwh.access.check import access_check as check_access
 from srdwh.config import load_settings
 from srdwh.generate.landing import write_landing
 from srdwh.log import Event, emit, run_end
@@ -56,6 +59,16 @@ def run(
         raise typer.Exit(EXIT_FAILURE) from None
     options = RunOptions(settings, data_dir, rebuild_from.date() if rebuild_from else None)
     raise typer.Exit(run_pipeline(options))
+
+
+@app.command("access-check", help="Check the access matrix of SPEC §2 under every profile account.")
+def access_check() -> None:
+    try:
+        code = check_access(sys.stdout)
+    except (ValueError, oracledb.Error) as error:
+        typer.echo(f"srdwh: access-check failed: {error}", err=True)
+        code = EXIT_FAILURE
+    raise typer.Exit(code)
 
 
 def main() -> None:
