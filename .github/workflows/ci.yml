@@ -46,3 +46,38 @@ jobs:
         run: make bronze-check
       - id: pytest
         run: uv run pytest -m "not db"
+
+  db:
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        with:
+          version: 0.13.6
+          enable-cache: true
+      - id: setup
+        run: make setup
+      - id: env
+        run: |
+          password() {
+            printf 'P%s' "$(head -c 96 /dev/urandom | base64 -w0 | tr -dc 'A-Za-z0-9' | cut -c1-23)"
+          }
+          printf 'SRDWH_ENV=ci\nSRDWH_DSN=localhost:1521/FREEPDB1\n' > .env
+          for name in ORACLE SRDWH_OWNER SRDWH_ETL ANALYST_CORP ANALYST_RETAIL RISK_MANAGER AUDITOR PROBE_NOPROFILE; do
+            value="$(password)"
+            echo "::add-mask::${value}"
+            echo "${name}_PASSWORD=${value}" >> .env
+          done
+      - id: up
+        run: make up
+      - id: tests
+        run: make test PYTEST_ARGS="--cov=srdwh --cov-report=term --cov-fail-under=80"
+      - id: e2e
+        run: make e2e PROFILE=ci
+      - id: logs
+        if: failure()
+        run: docker compose logs --no-log-prefix oracle | grep -v PASSWORD | tail -200
