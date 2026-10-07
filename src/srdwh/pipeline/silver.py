@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import TextIO
 
@@ -48,7 +48,7 @@ def plan(connection: oracledb.Connection, rebuild_from: date | None) -> list[Sil
 
 def reject(connection: oracledb.Connection, run_id: int, work: SilverWork, threshold: Decimal, stream: TextIO) -> bool:
     tag(connection, run_id, "rejects")
-    started, started_at = time.monotonic(), datetime.now(UTC)
+    started = time.monotonic()
     _silver(connection, "reject_counterparties", run_id, work.cpty_load_id)
     counterparties = _rejects(connection, "counterparty", work.cpty_load_id)
     found = [counterparties]
@@ -58,7 +58,7 @@ def reject(connection: oracledb.Connection, run_id: int, work: SilverWork, thres
     breached = [r for r in found if r.rate > threshold]
     status = "BREACH" if breached else "OK"
     loaded, rejected = sum(r.rows_loaded for r in found), sum(r.rows_rejected for r in found)
-    call(connection, "log_step", run_id, "rejects", work.as_of, started_at, loaded, None, rejected, status, None)
+    call(connection, "log_step", run_id, "rejects", work.as_of, _ms(started), loaded, None, rejected, status, None)
     connection.commit()
     for found_rejects in found:
         emit(_rejects_event(run_id, work, found_rejects, threshold, started), stream)
@@ -67,11 +67,11 @@ def reject(connection: oracledb.Connection, run_id: int, work: SilverWork, thres
 
 def replace(connection: oracledb.Connection, run_id: int, work: SilverWork, stream: TextIO) -> None:
     tag(connection, run_id, "silver")
-    started, started_at = time.monotonic(), datetime.now(UTC)
+    started = time.monotonic()
     _silver(connection, "replace_as_of", run_id, work.cpty_load_id, work.expo_load_id)
     call(connection, "record_silver", run_id, work.as_of, work.cpty_load_id, work.expo_load_id)
     rows = _silver_rows(connection, work)
-    call(connection, "log_step", run_id, "silver", work.as_of, started_at, None, rows, None, "OK", None)
+    call(connection, "log_step", run_id, "silver", work.as_of, _ms(started), None, rows, None, "OK", None)
     connection.commit()
     emit(Event("silver_end", "silver", run_id=run_id, as_of=work.as_of, rows=rows, duration_ms=_ms(started)), stream)
 

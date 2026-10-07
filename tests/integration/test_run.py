@@ -261,14 +261,14 @@ def test_late_correction_equals_full_run(
     assert run(landing(tmp_path, profile), capsys, monkeypatch)[0] == 0
     rewrite(tmp_path, "counterparty", profile.first_as_of, downgrade)
     code, events = run(tmp_path, capsys, monkeypatch)
-    assert code == 0
+    assert code == 0, named(events, "error")
     assert [e["as_of"] for e in named(events, "rewind_end")] == [profile.first_as_of.isoformat()]
     corrected = checksums(owner_connection, profile)
     retire(owner_connection, profile)
     code, events = run(tmp_path, capsys, monkeypatch)
-    assert code == 0
+    assert code == 0, named(events, "error")
     assert len(named(events, "load_end")) == 6
-    assert checksums(owner_connection, profile) == corrected
+    assert checksums(owner_connection, profile) == corrected, (profile.first_as_of, events[-1])
 
 
 MESSAGES = """
@@ -339,3 +339,25 @@ def test_lineage_fact_to_file_row(
     assert mismatched.height == 0
     assert set(traced["run_id"]) == {events[0]["run_id"]}
     assert set(traced["param_version"]) == {1}
+
+
+STEP_LOG = """
+    SELECT step, TO_CHAR(started_at, 'TZH:TZM'), CASE WHEN started_at <= ended_at THEN 'Y' ELSE 'N' END,
+        1000 * (EXTRACT(SECOND FROM (ended_at - started_at)) + 60 * EXTRACT(MINUTE FROM (ended_at - started_at))
+        + 3600 * EXTRACT(HOUR FROM (ended_at - started_at)))
+    FROM srdwh_owner.ops_run_log WHERE run_id = :run_id"""
+
+
+def test_step_log_on_one_clock(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    owner_connection: oracledb.Connection,
+    pipeline_profile: Callable[[int], Profile],
+) -> None:
+    code, events = run(landing(tmp_path, pipeline_profile(1)), capsys, monkeypatch)
+    assert code == 0
+    logged = rows(owner_connection, STEP_LOG, run_id=events[0]["run_id"])
+    assert {(zone, ordered) for _, zone, ordered, _ in logged} == {("+00:00", "Y")}
+    (run_ms,) = [float(str(ms)) for step, _, _, ms in logged if step == "run"]
+    assert abs(run_ms - float(str(events[-1]["duration_ms"]))) < 2000

@@ -1,5 +1,5 @@
 import time
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import TextIO
 
@@ -41,34 +41,34 @@ def gather_stats(connection: oracledb.Connection, run_id: int, tables: tuple[str
 
 def _rewind(connection: oracledb.Connection, run_id: int, start: date, stream: TextIO) -> None:
     tag(connection, run_id, "rewind")
-    started, started_at = time.monotonic(), datetime.now(UTC)
+    started = time.monotonic()
     call(connection, "clear_gold", run_id, start)
     with connection.cursor() as cursor:
         cursor.callproc(f"{GOLD}.rewind", [run_id, start])
-    call(connection, "log_step", run_id, "rewind", start, started_at, None, None, None, "OK", None)
+    call(connection, "log_step", run_id, "rewind", start, _ms(started), None, None, None, "OK", None)
     connection.commit()
     emit(Event("rewind_end", "rewind", run_id=run_id, as_of=start, duration_ms=_ms(started)), stream)
 
 
 def _build(connection: oracledb.Connection, run_id: int, as_of: date, stream: TextIO) -> None:
     tag(connection, run_id, "gold")
-    started, started_at = time.monotonic(), datetime.now(UTC)
+    started = time.monotonic()
     with connection.cursor() as cursor:
         cursor.callproc(f"{GOLD}.build_as_of", [run_id, as_of])
         cursor.callproc(f"{RWA}.compute", [run_id, as_of])
         built = cursor.var(int)
         cursor.callproc(f"{GOLD}.finish_as_of", [run_id, as_of, built])
         rows = int(built.getvalue())
-    call(connection, "log_step", run_id, "gold", as_of, started_at, None, rows, None, "OK", None)
+    call(connection, "log_step", run_id, "gold", as_of, _ms(started), None, rows, None, "OK", None)
     connection.commit()
     emit(Event("gold_end", "gold", run_id=run_id, as_of=as_of, rows=rows, duration_ms=_ms(started)), stream)
 
 
 def _export(connection: oracledb.Connection, run_id: int, as_of: date, exports: Path, stream: TextIO) -> None:
     tag(connection, run_id, "export")
-    started, started_at = time.monotonic(), datetime.now(UTC)
+    started = time.monotonic()
     rows = export_as_of(connection, as_of, exports)
-    call(connection, "log_step", run_id, "export", as_of, started_at, None, rows, None, "OK", None)
+    call(connection, "log_step", run_id, "export", as_of, _ms(started), None, rows, None, "OK", None)
     call(connection, "record_gold", run_id, as_of)
     connection.commit()
     emit(Event("export_end", "export", run_id=run_id, as_of=as_of, rows=rows, duration_ms=_ms(started)), stream)

@@ -314,7 +314,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_silver AS
         ),
 
         accepted_counterparties AS (
-            SELECT trim(cpty_id) AS cpty_id
+            SELECT DISTINCT trim(cpty_id) AS cpty_id
             FROM brz_counterparty
             WHERE
                 load_id = p_cpty_load_id
@@ -350,10 +350,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_silver AS
                     ) THEN 'R04'
                     WHEN s.t_as_of_date IS NULL OR s.t_as_of_date != s.partition_date THEN 'R05'
                     WHEN count(*) OVER (PARTITION BY s.t_exposure_id) > 1 THEN 'R06'
-                    WHEN NOT EXISTS (
-                        SELECT 1 FROM accepted_counterparties a
-                        WHERE a.cpty_id = s.t_cpty_id
-                    ) THEN 'R07'
+                    WHEN a.cpty_id IS NULL THEN 'R07'
                     WHEN s.collateral_value > 0 AND s.t_collateral_type IS NULL THEN 'R08'
                     WHEN s.t_collateral_type IS NOT NULL AND NOT EXISTS (
                         SELECT 1 FROM ref_collateral_type r
@@ -366,6 +363,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_silver AS
                     WHEN s.t_currency IS NULL OR s.t_currency != 'EUR' THEN 'R11'
                 END AS reason_code
             FROM src s
+            LEFT JOIN accepted_counterparties a ON s.t_cpty_id = a.cpty_id
         )
 
         SELECT

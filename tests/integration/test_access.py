@@ -82,6 +82,10 @@ def test_risk_manager_sees_every_segment(connect: Connect) -> None:
 DIMENSION = "SELECT cpty_sk, cpty_name, lei FROM srdwh_owner.gld_dim_counterparty"
 
 
+def masked(lei: object) -> object:
+    return None if lei is None else "*" * 16 + str(lei)[-4:]
+
+
 @pytest.mark.usefixtures("gold_loaded")
 def test_names_redacted_for_analyst(connect: Connect, owner_connection: oracledb.Connection) -> None:
     clear = {sk: (name, lei) for sk, name, lei in rows(owner_connection, DIMENSION)}
@@ -91,7 +95,7 @@ def test_names_redacted_for_analyst(connect: Connect, owner_connection: oracledb
         managed = rows(connection, DIMENSION)
     assert seen
     assert {name for _, name, _ in seen} == {" "}
-    assert all(lei == "*" * 16 + str(clear[sk][1])[-4:] for sk, _, lei in seen)
+    assert all(lei == masked(clear[sk][1]) for sk, _, lei in seen)
     assert {sk: (name, lei) for sk, name, lei in managed} == {sk: clear[sk] for sk, _, _ in managed}
 
 

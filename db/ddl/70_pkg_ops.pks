@@ -48,7 +48,7 @@ CREATE OR REPLACE PACKAGE pkg_ops AUTHID DEFINER AS
         p_run_id IN NUMBER,
         p_step IN VARCHAR2,
         p_as_of_date IN DATE,
-        p_started_at IN TIMESTAMP WITH TIME ZONE,
+        p_duration_ms IN NUMBER,
         p_rows_in IN NUMBER,
         p_rows_out IN NUMBER,
         p_rows_rejected IN NUMBER,

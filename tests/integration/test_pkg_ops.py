@@ -1,6 +1,6 @@
 import os
 from collections.abc import Iterator
-from datetime import UTC, date, datetime
+from datetime import date
 
 import oracledb
 import pytest
@@ -97,16 +97,18 @@ def test_start_run_and_log_step(owner: oracledb.Connection) -> None:
         assert second > first
         cursor.callproc(
             "srdwh_owner.pkg_ops.log_step",
-            [second, "ingest", AS_OF, datetime.now(UTC), 10, 9, 1, "OK", None],
+            [second, "ingest", AS_OF, 1500, 10, 9, 1, "OK", None],
         )
     logged = rows(
         owner,
-        "SELECT step, TO_CHAR(as_of_date, 'YYYY-MM-DD'), rows_in, rows_out, rows_rejected, status "
-        "FROM srdwh_owner.ops_run_log "
-        "WHERE run_id = :run_id AND ended_at IS NOT NULL",
+        "SELECT step, TO_CHAR(as_of_date, 'YYYY-MM-DD'), rows_in, rows_out, rows_rejected, status, "
+        "TO_CHAR(started_at, 'TZH:TZM'), TO_CHAR(ended_at, 'TZH:TZM'), "
+        "EXTRACT(SECOND FROM (ended_at - started_at)) + 60 * EXTRACT(MINUTE FROM (ended_at - started_at)) "
+        "+ 3600 * EXTRACT(HOUR FROM (ended_at - started_at)) "
+        "FROM srdwh_owner.ops_run_log WHERE run_id = :run_id",
         run_id=second,
     )
-    assert logged == [("ingest", AS_OF.isoformat(), 10, 9, 1, "OK")]
+    assert logged == [("ingest", AS_OF.isoformat(), 10, 9, 1, "OK", "+00:00", "+00:00", 1.5)]
 
 
 def test_pkg_err_logs_autonomously_and_caller_reraises(owner: oracledb.Connection) -> None:

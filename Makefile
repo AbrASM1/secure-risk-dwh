@@ -9,6 +9,7 @@ UTPLSQL_CLI_SHA256 := 15a3addd921b7f2e415537b47c18a4a9d3e0b70ff0e403943fd4c03b0b
 RELEASES := https://github.com/utPLSQL
 BRONZE_SCOPE := db/ddl db/init src
 PROFILE ?= dev
+DATA_DIR ?= data
 PYTEST_ARGS ?=
 BRONZE_MUTATION := \b(update|delete|merge|truncate)\s+(/\*.*?\*/\s*)?((from|into|table)\s+)?("?\w+"?\.)?"?brz_|\balter\s+table\s+("?\w+"?\.)?"?brz_\w*"?\s+truncate\b|\bgrant\s[^;]*?\b(update|delete|all)\b[^;]*?\bon\s+("?\w+"?\.)?"?brz_
 
@@ -59,6 +60,6 @@ access-check:
 	uv run srdwh access-check
 
 e2e: up
-	uv run srdwh generate --profile $(PROFILE)
-	uv run srdwh run --profile $(PROFILE)
+	uv run srdwh generate --profile $(PROFILE) --data-dir $(DATA_DIR)
+	uv run srdwh run --profile $(PROFILE) --data-dir $(DATA_DIR)
 	uv run srdwh access-check

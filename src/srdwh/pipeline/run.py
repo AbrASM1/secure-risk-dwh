@@ -1,7 +1,7 @@
 import sys
 import time
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import TextIO
 
@@ -65,7 +65,7 @@ def _locked(connection: oracledb.Connection, options: RunOptions, stream: TextIO
 
 
 def _body(connection: oracledb.Connection, run_id: int, options: RunOptions, stream: TextIO) -> int:
-    started_at = datetime.now(UTC)
+    started = time.monotonic()
     tag(connection, run_id, "run")
     emit(Event("run_start", "run", run_id=run_id), stream)
     try:
@@ -77,7 +77,7 @@ def _body(connection: oracledb.Connection, run_id: int, options: RunOptions, str
         connection.rollback()
         _report(stream, run_id, "run", error)
         code = EXIT_FAILURE
-    _log_step(connection, run_id, "run", None, started_at, None, RUN_STATUS[code])
+    _log_step(connection, run_id, "run", None, _elapsed_ms(started), None, RUN_STATUS[code])
     return code
 
 
@@ -107,10 +107,11 @@ def _ingest_partition(
     if is_loaded(connection, partition.feed, partition.as_of, delivery.sha256):
         emit(_partition_event("load_skipped", partition, run_id), stream)
         return
-    started, started_at = time.monotonic(), datetime.now(UTC)
+    started = time.monotonic()
     result = load(connection, run_id, delivery, batch_size)
     status = "OK" if result.status == "LOADED" else "FAILED"
-    _log_step(connection, run_id, "ingest", partition, started_at, (delivery.frame.height, result.rows_loaded), status)
+    rows = (delivery.frame.height, result.rows_loaded)
+    _log_step(connection, run_id, "ingest", partition, _elapsed_ms(started), rows, status)
     loaded = _partition_event("load_end", partition, run_id, "INFO" if status == "OK" else "ERROR")
     emit(replace(loaded, load_id=result.load_id, rows=result.rows_loaded, duration_ms=_elapsed_ms(started)), stream)
     if status != "OK":
@@ -126,13 +127,13 @@ def _log_step(
     run_id: int,
     step: str,
     partition: Partition | None,
-    started_at: datetime,
+    duration_ms: int,
     rows: tuple[int, int | None] | None,
     status: str,
 ) -> None:
     rows_in, rows_out = rows or (None, None)
     as_of = partition.as_of if partition else None
-    call(connection, "log_step", run_id, step, as_of, started_at, rows_in, rows_out, None, status, None)
+    call(connection, "log_step", run_id, step, as_of, duration_ms, rows_in, rows_out, None, status, None)
     connection.commit()
 
 

@@ -238,19 +238,20 @@ CREATE OR REPLACE PACKAGE BODY pkg_ops AS
         p_run_id IN NUMBER,
         p_step IN VARCHAR2,
         p_as_of_date IN DATE,
-        p_started_at IN TIMESTAMP WITH TIME ZONE,
+        p_duration_ms IN NUMBER,
         p_rows_in IN NUMBER,
         p_rows_out IN NUMBER,
         p_rows_rejected IN NUMBER,
         p_status IN VARCHAR2,
         p_message IN VARCHAR2
     ) IS
+        l_ended TIMESTAMP WITH TIME ZONE := systimestamp AT TIME ZONE '+00:00';
     BEGIN
         INSERT INTO ops_run_log (
             run_id, step, as_of_date, started_at, ended_at, rows_in, rows_out, rows_rejected, status, message
         )
         VALUES (
-            p_run_id, p_step, p_as_of_date, p_started_at, systimestamp AT TIME ZONE '+00:00',
+            p_run_id, p_step, p_as_of_date, l_ended - numtodsinterval(p_duration_ms / 1000, 'SECOND'), l_ended,
             p_rows_in, p_rows_out, p_rows_rejected, p_status, substr(p_message, 1, 4000)
         );
         EXCEPTION
