@@ -47,6 +47,7 @@ flowchart TD
 | export failure | disk full, permissions | free space; gold and exports are rebuilt by the next run |
 | a profile account sees no row | logon context not set | check `OPS_ERR_LOG` step `logon` and `SEC_USER_ACCESS`, reconnect |
 | `srdwh access-check` exits 1 | a grant, policy or role differs from the matrix | read the KO lines, restore the deployment (`make reset` in dev) |
+| ORA-28075 on a read of `cpty_name` or `lei` | Oracle failed to re-evaluate the redaction expression in a session that had already read these columns (trace: ORA-25448 on `KWRIXEIEXP`); the policy itself is intact and no data is returned | reconnect and rerun the query; the pipeline and access-check open short sessions |
 
 ## Diagnostics
 

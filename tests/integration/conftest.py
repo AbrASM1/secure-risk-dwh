@@ -25,7 +25,7 @@ def connect() -> Connect:
     return open_as
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def owner_connection(connect: Connect) -> Iterator[oracledb.Connection]:
     connection = connect("SRDWH_OWNER")
     yield connection

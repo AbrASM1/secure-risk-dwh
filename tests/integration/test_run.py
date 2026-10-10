@@ -12,7 +12,7 @@ import pytest
 
 from srdwh.config import Profile
 from srdwh.contracts.landing import EXPECTED, partition_folder
-from tests.integration.db import rows
+from tests.integration.db import Connect, rows
 from tests.integration.pipeline import identities, landing, named, retire, rewrite, run
 
 pytestmark = pytest.mark.db
@@ -201,9 +201,10 @@ FACTS = """
     WHERE f.as_of_date BETWEEN :first AND :last GROUP BY f.as_of_date ORDER BY 1"""
 
 
-def checksums(connection: oracledb.Connection, profile: Profile) -> tuple[object, ...]:
+def checksums(connect: Connect, profile: Profile) -> tuple[object, ...]:
     window = {"first": profile.first_as_of, "last": profile.as_of_dates[-1]}
-    return rows(connection, DIMENSION, first=profile.first_as_of)[0], tuple(rows(connection, FACTS, **window))
+    with connect("SRDWH_OWNER") as connection:
+        return rows(connection, DIMENSION, first=profile.first_as_of)[0], tuple(rows(connection, FACTS, **window))
 
 
 def downgrade(frame: pl.DataFrame) -> pl.DataFrame:
@@ -236,24 +237,25 @@ def test_rebuild_from_equals_full_run(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
-    owner_connection: oracledb.Connection,
+    connect: Connect,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
     profile = pipeline_profile(3)
     assert run(landing(tmp_path, profile), capsys, monkeypatch)[0] == 0
-    full = checksums(owner_connection, profile)
+    full = checksums(connect, profile)
     code, events = run(tmp_path, capsys, monkeypatch, "--rebuild-from", profile.first_as_of.isoformat())
     assert code == 0
     days = [d.isoformat() for d in profile.as_of_dates]
     assert [e["as_of"] for e in named(events, "silver_end") if e["as_of"] in days] == days
     assert [e["as_of"] for e in named(events, "gold_end") if e["as_of"] in days] == days
-    assert checksums(owner_connection, profile) == full
+    assert checksums(connect, profile) == full
 
 
 def test_late_correction_equals_full_run(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    connect: Connect,
     owner_connection: oracledb.Connection,
     pipeline_profile: Callable[[int], Profile],
 ) -> None:
@@ -263,12 +265,12 @@ def test_late_correction_equals_full_run(
     code, events = run(tmp_path, capsys, monkeypatch)
     assert code == 0, named(events, "error")
     assert [e["as_of"] for e in named(events, "rewind_end")] == [profile.first_as_of.isoformat()]
-    corrected = checksums(owner_connection, profile)
+    corrected = checksums(connect, profile)
     retire(owner_connection, profile)
     code, events = run(tmp_path, capsys, monkeypatch)
     assert code == 0, named(events, "error")
     assert len(named(events, "load_end")) == 6
-    assert checksums(owner_connection, profile) == corrected, (profile.first_as_of, events[-1])
+    assert checksums(connect, profile) == corrected, (profile.first_as_of, events[-1])
 
 
 MESSAGES = """
