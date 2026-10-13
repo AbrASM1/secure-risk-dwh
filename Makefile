@@ -10,6 +10,7 @@ RELEASES := https://github.com/utPLSQL
 BRONZE_SCOPE := db/ddl db/init src
 PROFILE ?= dev
 DATA_DIR ?= data
+REPORTS := reports
 PYTEST_ARGS ?=
 BRONZE_MUTATION := \b(update|delete|merge|truncate)\s+(/\*.*?\*/\s*)?((from|into|table)\s+)?("?\w+"?\.)?"?brz_|\balter\s+table\s+("?\w+"?\.)?"?brz_\w*"?\s+truncate\b|\bgrant\s[^;]*?\b(update|delete|all)\b[^;]*?\bon\s+("?\w+"?\.)?"?brz_
 
@@ -52,9 +53,11 @@ bronze-check:
 	grep -rIilPz '$(BRONZE_MUTATION)' $(wildcard $(BRONZE_SCOPE)); test $$? -eq 1
 
 test:
-	uv run pytest -m "not perf" $(PYTEST_ARGS)
+	mkdir -p $(REPORTS)
+	uv run pytest -m "not perf" --junitxml=$(REPORTS)/pytest.xml $(PYTEST_ARGS)
 	@JAVA_OPTS=--enable-native-access=ALL-UNNAMED $(CACHE)/utPLSQL-cli/bin/utplsql run \
-		"SRDWH_OWNER/$${SRDWH_OWNER_PASSWORD}@$${SRDWH_DSN}" -f=ut_documentation_reporter -c --failure-exit-code=1
+		"SRDWH_OWNER/$${SRDWH_OWNER_PASSWORD}@$${SRDWH_DSN}" -f=ut_documentation_reporter -c \
+		-f=ut_junit_reporter -o=$(REPORTS)/utplsql.xml --failure-exit-code=1
 
 access-check:
 	uv run srdwh access-check

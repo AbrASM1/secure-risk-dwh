@@ -6,6 +6,8 @@ Credit-risk data platform on Oracle AI Database 26ai Free. Counterparty and expo
 bronze, silver and gold medallion, feed a standardised-approach credit RWA calculation, and are served to analysts under
 row, column and audit controls enforced by the database itself.
 
+No client data: feeds are simulator output, built to the production feed contract.
+
 ```mermaid
 flowchart LR
     sim[srdwh generate<br/>seeded simulator] --> landing[(data/landing<br/>Parquet + manifest)]
@@ -22,7 +24,8 @@ flowchart LR
 
 ## Quick start
 
-Prerequisites: Linux or WSL2 with Docker, `uv`, `make`, `curl`, `unzip` and Java 17 or later (utPLSQL-cli).
+Prerequisites, on Linux, macOS or Windows through WSL2: Docker, `uv`, `make`, `curl`, `unzip`, `sha256sum` (GNU
+coreutils on macOS) and Java 17 or later (utPLSQL-cli).
 
 ```bash
 cp .env.example .env    # fill every value, see below
@@ -50,6 +53,21 @@ make e2e                # start Oracle, generate the dev profile, run the pipeli
 `srdwh run` exits 0 when done or when nothing is left to process, 1 on a technical or structural failure, 2 when a reject
 rate exceeds `reject_threshold` (nothing replaced). Every run writes one JSON line per event on stdout; no name, LEI or
 row amount appears in logs, errors or exports.
+
+## Dev-profile baseline
+
+Measured on WSL2 with Docker Desktop, Oracle limited by Free to 2 CPU and 2 GB, empty volume, seed 42.
+
+| Measure | Value |
+|---|---|
+| Delivered | 24 files, 12 month-ends: 60,034 counterparty and 600,548 exposure rows |
+| Rejected | 9,898 rows, each with the reason code the simulator injected |
+| Gold | 590,984 exposures with RWA over 12 month-ends |
+| Total RWA, 2025-12-31 | 27,252,565,692.47 EUR (EAD 57,534,203,564.376, density 47.4 %) |
+| `srdwh run`, 12 month-ends | 94.9 s, peak RSS 159 MB |
+| `make reset` then `make e2e` | 269 s: database creation 166 s; generate, run and access-check 103 s |
+| Oracle segments, indexes included | 737 MB of the 12 GB limit |
+| Tests | 307 pytest (unit and database), 55 utPLSQL |
 
 ## Access matrix
 
