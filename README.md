@@ -1,6 +1,6 @@
 # secure-risk-dwh
 
-[![ci](https://github.com/abderrahimasmane/secure-risk-dwh/actions/workflows/ci.yml/badge.svg)](https://github.com/abderrahimasmane/secure-risk-dwh/actions/workflows/ci.yml)
+[![ci](https://github.com/AbrASM1/secure-risk-dwh/actions/workflows/ci.yml/badge.svg)](https://github.com/AbrASM1/secure-risk-dwh/actions/workflows/ci.yml)
 
 Credit-risk data platform on Oracle AI Database 26ai Free. Counterparty and exposure feeds land as Parquet, flow through a
 bronze, silver and gold medallion, feed a standardised-approach credit RWA calculation, and are served to analysts under

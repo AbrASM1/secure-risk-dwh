@@ -12,7 +12,7 @@ import pytest
 
 from srdwh.config import Profile
 from srdwh.contracts.landing import EXPECTED, partition_folder
-from tests.integration.db import Connect, rows
+from tests.integration.db import Connect, read_redacted, rows
 from tests.integration.pipeline import identities, landing, named, retire, rewrite, run
 
 pytestmark = pytest.mark.db
@@ -203,8 +203,8 @@ FACTS = """
 
 def checksums(connect: Connect, profile: Profile) -> tuple[object, ...]:
     window = {"first": profile.first_as_of, "last": profile.as_of_dates[-1]}
-    with connect("SRDWH_OWNER") as connection:
-        return rows(connection, DIMENSION, first=profile.first_as_of)[0], tuple(rows(connection, FACTS, **window))
+    dimension = read_redacted(connect, "SRDWH_OWNER", DIMENSION, first=profile.first_as_of)[0]
+    return dimension, tuple(read_redacted(connect, "SRDWH_OWNER", FACTS, **window))
 
 
 def downgrade(frame: pl.DataFrame) -> pl.DataFrame:
